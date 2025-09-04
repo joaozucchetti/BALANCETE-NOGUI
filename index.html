@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Balancete</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 Sistema de Balancete</h1>
+            <p>Sistema para lançamento e validação de balancetes contábeis</p>
+        </header>
+
+        <main>
+            <!-- Formulário para novo balancete -->
+            <section class="balancete-form">
+                <h2>Novo Balancete</h2>
+                <form id="balanceteForm">
+                    <div class="form-group">
+                        <label for="data">Data do Balancete:</label>
+                        <input type="date" id="data" required>
+                    </div>
+
+                    <div class="lancamentos-section">
+                        <h3>Lançamentos</h3>
+                        <div id="lancamentos-container">
+                            <div class="lancamento-item">
+                                <select class="tipo" required>
+                                    <option value="">Tipo</option>
+                                    <option value="debito">Débito</option>
+                                    <option value="credito">Crédito</option>
+                                </select>
+                                <div class="conta-selector" style="display: none;">
+                                    <input type="text" class="conta-search" placeholder="Buscar conta...">
+                                    <select class="conta" required>
+                                        <option value="">Selecione a conta</option>
+                                    </select>
+                                </div>
+                                <input type="number" placeholder="Valor" class="valor" step="0.01" min="0" required>
+                                <button type="button" class="remove-lancamento" onclick="removerLancamento(this)">❌</button>
+                            </div>
+                        </div>
+                        <button type="button" id="addLancamento" onclick="adicionarLancamento()">➕ Adicionar Lançamento</button>
+                    </div>
+
+                    <div class="balance-info">
+                        <div class="totals">
+                            <span>Total Débitos: R$ <span id="totalDebitos">0.00</span></span>
+                            <span>Total Créditos: R$ <span id="totalCreditos">0.00</span></span>
+                            <span class="balance-status" id="balanceStatus">Diferença: R$ 0.00</span>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" onclick="calcularBalance()">🧮 Calcular Balanço</button>
+                        <button type="submit" id="submitBtn" disabled>💾 Lançar Balancete</button>
+                        <button type="button" onclick="limparFormulario()">🗑️ Limpar</button>
+                    </div>
+                </form>
+            </section>
+
+            <!-- Histórico de balancetes -->
+            <section class="historico-section">
+                <h2>Histórico de Balancetes</h2>
+                <div class="stats">
+                    <span>Total de balancetes: <strong id="totalBalancetes">0</strong></span>
+                    <button onclick="limparCache()" class="clear-cache-btn">🗑️ Limpar Cache</button>
+                </div>
+                <div id="historico-container">
+                    <p class="empty-state">Nenhum balancete lançado ainda.</p>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
