@@ -1,3 +1,86 @@
+// Exportação PDF individual
+function exportarPDF(id) {
+    if (!window.jspdf || !window.jspdf.jsPDF) {
+        alert('jsPDF não carregado!');
+        return;
+    }
+    const balancete = sistemaBalancete.balancetes.find(b => b.id === id);
+    if (!balancete) {
+        alert('Balancete não encontrado!');
+        return;
+    }
+    const doc = new window.jspdf.jsPDF();
+    let y = 15;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.text('Balancete', 105, y, { align: 'center' });
+    y += 10;
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Data: ${new Date(balancete.data + 'T00:00:00').toLocaleDateString('pt-BR')}`, 15, y);
+    doc.text(`Lançado em: ${balancete.timestamp}`, 120, y);
+    y += 10;
+    doc.setFont('helvetica', 'bold');
+    doc.text('Conta', 15, y);
+    doc.text('Tipo', 100, y);
+    doc.text('Valor (R$)', 150, y);
+    doc.setFont('helvetica', 'normal');
+    y += 7;
+    balancete.lancamentos.forEach(l => {
+        doc.text(l.conta, 15, y, { maxWidth: 80 });
+        doc.text(l.tipo.charAt(0).toUpperCase() + l.tipo.slice(1), 100, y);
+        doc.text(sistemaBalancete.formatarMoeda(l.valor), 150, y, { align: 'right' });
+        y += 7;
+        if (y > 270) { doc.addPage(); y = 15; }
+    });
+    y += 5;
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Total Débitos: R$ ${sistemaBalancete.formatarMoeda(balancete.totalDebitos)}`, 15, y);
+    doc.text(`Total Créditos: R$ ${sistemaBalancete.formatarMoeda(balancete.totalCreditos)}`, 100, y);
+    y += 10;
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(10);
+    doc.text('Gerado por Sistema de Balancete', 15, y);
+    doc.save(`balancete_${balancete.data}.pdf`);
+}
+
+// Exportação PDF geral
+function exportarTodosPDF() {
+    if (!window.jspdf || !window.jspdf.jsPDF) {
+        alert('jsPDF não carregado!');
+        return;
+    }
+    const doc = new window.jspdf.jsPDF();
+    let y = 15;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.text('Relatório de Balancetes', 105, y, { align: 'center' });
+    y += 10;
+    doc.setFontSize(11);
+    sistemaBalancete.balancetes.forEach((b, idx) => {
+        if (y > 260) { doc.addPage(); y = 15; }
+        doc.setFont('helvetica', 'bold');
+        doc.text(`Balancete ${idx + 1} - Data: ${new Date(b.data + 'T00:00:00').toLocaleDateString('pt-BR')}`, 15, y);
+        y += 7;
+        doc.setFont('helvetica', 'normal');
+        b.lancamentos.forEach(l => {
+            doc.text(l.conta, 20, y, { maxWidth: 80 });
+            doc.text(l.tipo.charAt(0).toUpperCase() + l.tipo.slice(1), 100, y);
+            doc.text(sistemaBalancete.formatarMoeda(l.valor), 150, y, { align: 'right' });
+            y += 6;
+            if (y > 260) { doc.addPage(); y = 15; }
+        });
+        y += 2;
+        doc.setFont('helvetica', 'bold');
+        doc.text(`Total Débitos: R$ ${sistemaBalancete.formatarMoeda(b.totalDebitos)}`, 20, y);
+        doc.text(`Total Créditos: R$ ${sistemaBalancete.formatarMoeda(b.totalCreditos)}`, 100, y);
+        y += 10;
+    });
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(10);
+    doc.text('Gerado por Sistema de Balancete', 15, y);
+    doc.save('relatorio_balancetes.pdf');
+}
 // Sistema de Balancete - JavaScript Principal
 
 class SistemaBalancete {
@@ -182,21 +265,31 @@ class SistemaBalancete {
                 console.log('Valor alterado:', e.target.value);
                 this.calcularBalance();
             }
-            if (e.target.classList.contains('conta-search')) {
-                this.filtrarContas(e.target);
+            if (e.target.classList.contains('conta-input')) {
+                this.buscarContasInteligente(e.target);
             }
         });
 
-        // Evento para mudança de tipo (débito/crédito) e conta
+        // Evento para mudança de tipo (débito/crédito)
         document.addEventListener('change', (e) => {
             if (e.target.classList.contains('tipo')) {
                 console.log('Tipo alterado:', e.target.value);
-                this.mostrarContas(e.target);
+                this.mostrarCampoConta(e.target);
                 this.calcularBalance();
             }
-            if (e.target.classList.contains('conta')) {
-                console.log('Conta alterada:', e.target.value);
-                this.calcularBalance();
+        });
+
+        // Eventos para navegação nas sugestões
+        document.addEventListener('keydown', (e) => {
+            if (e.target.classList.contains('conta-input')) {
+                this.navegarSugestoes(e);
+            }
+        });
+
+        // Fechar sugestões ao clicar fora
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.conta-selector')) {
+                this.fecharTodasSugestoes();
             }
         });
 
@@ -206,57 +299,231 @@ class SistemaBalancete {
         }, 100);
     }
 
-    mostrarContas(tipoSelect) {
+    mostrarCampoConta(tipoSelect) {
         const lancamentoItem = tipoSelect.closest('.lancamento-item');
         const contaSelector = lancamentoItem.querySelector('.conta-selector');
-        const contaSelect = lancamentoItem.querySelector('.conta');
-        const contaSearch = lancamentoItem.querySelector('.conta-search');
+        const contaInput = lancamentoItem.querySelector('.conta-input');
         
         const tipo = tipoSelect.value;
         
         if (tipo) {
             contaSelector.style.display = 'block';
-            this.preencherContas(contaSelect, tipo);
-            contaSearch.value = '';
+            contaInput.focus();
+            contaInput.value = '';
+            contaInput.setAttribute('data-tipo', tipo);
+            this.limparContaSelecionada(lancamentoItem);
         } else {
             contaSelector.style.display = 'none';
+            this.fecharSugestoes(lancamentoItem);
         }
     }
 
-    preencherContas(contaSelect, tipo) {
-        contaSelect.innerHTML = '<option value="">Selecione a conta</option>';
+    buscarContasInteligente(input) {
+        const termo = input.value.toLowerCase().trim();
+        const tipo = input.getAttribute('data-tipo');
+        const lancamentoItem = input.closest('.lancamento-item');
+        const sugestoesContainer = lancamentoItem.querySelector('.sugestoes-container');
+        const sugestoesLista = lancamentoItem.querySelector('.sugestoes-lista');
         
+        if (!termo || termo.length < 2) {
+            this.fecharSugestoes(lancamentoItem);
+            this.limparContaSelecionada(lancamentoItem);
+            return;
+        }
+
         const contas = this.contas[tipo] || [];
+        const sugestoes = this.buscarPorAproximacao(termo, contas);
+        
+        if (sugestoes.length > 0) {
+            this.mostrarSugestoes(sugestoesLista, sugestoes, termo, lancamentoItem);
+            sugestoesContainer.style.display = 'block';
+        } else {
+            this.fecharSugestoes(lancamentoItem);
+        }
+    }
+
+    buscarPorAproximacao(termo, contas) {
+        const resultados = [];
+        
         contas.forEach(conta => {
-            const option = document.createElement('option');
-            option.value = conta;
-            option.textContent = conta;
-            contaSelect.appendChild(option);
+            const contaLower = conta.toLowerCase();
+            let pontuacao = 0;
+            
+            // Busca exata (maior pontuação)
+            if (contaLower.includes(termo)) {
+                pontuacao = 100;
+            } else {
+                // Busca por palavras individuais
+                const palavrasTermo = termo.split(' ');
+                const palavrasConta = contaLower.split(' ');
+                
+                palavrasTermo.forEach(palavraTermo => {
+                    palavrasConta.forEach(palavraConta => {
+                        // Palavra começa com o termo
+                        if (palavraConta.startsWith(palavraTermo)) {
+                            pontuacao += 50;
+                        }
+                        // Palavra contém o termo
+                        else if (palavraConta.includes(palavraTermo)) {
+                            pontuacao += 30;
+                        }
+                        // Aproximação por sílabas/letras
+                        else if (this.calcularSimilaridade(palavraTermo, palavraConta) > 0.6) {
+                            pontuacao += 20;
+                        }
+                    });
+                });
+            }
+            
+            if (pontuacao > 0) {
+                resultados.push({ conta, pontuacao });
+            }
+        });
+        
+        // Ordenar por pontuação (maior primeiro) e retornar apenas as contas
+        return resultados
+            .sort((a, b) => b.pontuacao - a.pontuacao)
+            .slice(0, 8) // Limitar a 8 sugestões
+            .map(r => r.conta);
+    }
+
+    calcularSimilaridade(str1, str2) {
+        const len1 = str1.length;
+        const len2 = str2.length;
+        const maxLen = Math.max(len1, len2);
+        
+        if (maxLen === 0) return 1;
+        
+        // Algoritmo de distância de Levenshtein simplificado
+        const matriz = [];
+        
+        for (let i = 0; i <= len1; i++) {
+            matriz[i] = [i];
+        }
+        
+        for (let j = 0; j <= len2; j++) {
+            matriz[0][j] = j;
+        }
+        
+        for (let i = 1; i <= len1; i++) {
+            for (let j = 1; j <= len2; j++) {
+                if (str1[i - 1] === str2[j - 1]) {
+                    matriz[i][j] = matriz[i - 1][j - 1];
+                } else {
+                    matriz[i][j] = Math.min(
+                        matriz[i - 1][j] + 1,
+                        matriz[i][j - 1] + 1,
+                        matriz[i - 1][j - 1] + 1
+                    );
+                }
+            }
+        }
+        
+        return 1 - (matriz[len1][len2] / maxLen);
+    }
+
+    mostrarSugestoes(container, sugestoes, termo, lancamentoItem) {
+        container.innerHTML = '';
+        
+        sugestoes.forEach((conta, index) => {
+            const item = document.createElement('div');
+            item.className = 'sugestao-item';
+            if (index === 0) item.classList.add('ativo');
+            
+            // Destacar termo encontrado
+            const contaHighlight = this.destacarTermo(conta, termo);
+            item.innerHTML = contaHighlight;
+            
+            item.addEventListener('click', () => {
+                this.selecionarConta(conta, lancamentoItem);
+            });
+            
+            container.appendChild(item);
         });
     }
 
-    filtrarContas(searchInput) {
-        const lancamentoItem = searchInput.closest('.lancamento-item');
-        const contaSelect = lancamentoItem.querySelector('.conta');
-        const tipoSelect = lancamentoItem.querySelector('.tipo');
+    destacarTermo(texto, termo) {
+        const regex = new RegExp(`(${termo})`, 'gi');
+        return texto.replace(regex, '<span class="sugestao-match">$1</span>');
+    }
+
+    navegarSugestoes(e) {
+        const lancamentoItem = e.target.closest('.lancamento-item');
+        const itens = lancamentoItem.querySelectorAll('.sugestao-item');
         
-        const searchTerm = searchInput.value.toLowerCase();
-        const tipo = tipoSelect.value;
+        if (itens.length === 0) return;
         
-        if (!tipo) return;
+        let ativo = lancamentoItem.querySelector('.sugestao-item.ativo');
+        let novoIndex = -1;
         
-        contaSelect.innerHTML = '<option value="">Selecione a conta</option>';
+        switch (e.key) {
+            case 'ArrowDown':
+                e.preventDefault();
+                if (ativo) {
+                    novoIndex = Array.from(itens).indexOf(ativo) + 1;
+                    if (novoIndex >= itens.length) novoIndex = 0;
+                } else {
+                    novoIndex = 0;
+                }
+                break;
+                
+            case 'ArrowUp':
+                e.preventDefault();
+                if (ativo) {
+                    novoIndex = Array.from(itens).indexOf(ativo) - 1;
+                    if (novoIndex < 0) novoIndex = itens.length - 1;
+                } else {
+                    novoIndex = itens.length - 1;
+                }
+                break;
+                
+            case 'Enter':
+                e.preventDefault();
+                if (ativo) {
+                    const conta = ativo.textContent;
+                    this.selecionarConta(conta, lancamentoItem);
+                }
+                break;
+                
+            case 'Escape':
+                this.fecharSugestoes(lancamentoItem);
+                break;
+        }
         
-        const contas = this.contas[tipo] || [];
-        const contasFiltradas = contas.filter(conta => 
-            conta.toLowerCase().includes(searchTerm)
-        );
+        if (novoIndex >= 0) {
+            itens.forEach(item => item.classList.remove('ativo'));
+            itens[novoIndex].classList.add('ativo');
+        }
+    }
+
+    selecionarConta(conta, lancamentoItem) {
+        const contaInput = lancamentoItem.querySelector('.conta-input');
+        const contaHidden = lancamentoItem.querySelector('.conta-selecionada');
         
-        contasFiltradas.forEach(conta => {
-            const option = document.createElement('option');
-            option.value = conta;
-            option.textContent = conta;
-            contaSelect.appendChild(option);
+        contaInput.value = conta;
+        contaHidden.value = conta;
+        
+        this.fecharSugestoes(lancamentoItem);
+        this.calcularBalance();
+    }
+
+    limparContaSelecionada(lancamentoItem) {
+        const contaHidden = lancamentoItem.querySelector('.conta-selecionada');
+        if (contaHidden) {
+            contaHidden.value = '';
+        }
+    }
+
+    fecharSugestoes(lancamentoItem) {
+        const sugestoesContainer = lancamentoItem.querySelector('.sugestoes-container');
+        if (sugestoesContainer) {
+            sugestoesContainer.style.display = 'none';
+        }
+    }
+
+    fecharTodasSugestoes() {
+        document.querySelectorAll('.sugestoes-container').forEach(container => {
+            container.style.display = 'none';
         });
     }
 
@@ -283,10 +550,11 @@ class SistemaBalancete {
                 <option value="credito">Crédito</option>
             </select>
             <div class="conta-selector" style="display: none;">
-                <input type="text" class="conta-search" placeholder="Buscar conta...">
-                <select class="conta" required>
-                    <option value="">Selecione a conta</option>
-                </select>
+                <input type="text" class="conta-input" placeholder="Digite para buscar conta..." autocomplete="off">
+                <div class="sugestoes-container" style="display: none;">
+                    <div class="sugestoes-lista"></div>
+                </div>
+                <input type="hidden" class="conta-selecionada">
             </div>
             <input type="number" placeholder="Valor" class="valor" step="0.01" min="0" required>
             <button type="button" class="remove-lancamento" onclick="sistemaBalancete.removerLancamento(this)">❌</button>
@@ -368,7 +636,7 @@ class SistemaBalancete {
 
         lancamentoItems.forEach((item, index) => {
             const tipoElement = item.querySelector('.tipo');
-            const contaElement = item.querySelector('.conta');
+            const contaElement = item.querySelector('.conta-selecionada');
             const valorElement = item.querySelector('.valor');
 
             const tipo = tipoElement ? tipoElement.value : '';
@@ -492,16 +760,16 @@ class SistemaBalancete {
                     <div class="balancete-date">📅 ${dataFormatada}</div>
                     <div class="balancete-status status-balanced">✅ Balanceado</div>
                 </div>
-                
+                <div style="display: flex; justify-content: flex-end; margin-bottom: 8px;">
+                    <button type="button" onclick="exportarPDF(${balancete.id})" class="exportar-pdf-btn">📄 Exportar PDF</button>
+                </div>
                 <div class="lancamentos-list">
                     ${lancamentosHtml}
                 </div>
-                
                 <div class="balancete-totals">
                     <span class="total-debitos">Total Débitos: R$ ${this.formatarMoeda(balancete.totalDebitos)}</span>
                     <span class="total-creditos">Total Créditos: R$ ${this.formatarMoeda(balancete.totalCreditos)}</span>
                 </div>
-                
                 <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ecf0f1; font-size: 12px; color: #7f8c8d;">
                     Lançado em: ${balancete.timestamp}
                 </div>
@@ -531,10 +799,11 @@ class SistemaBalancete {
                     <option value="credito">Crédito</option>
                 </select>
                 <div class="conta-selector" style="display: none;">
-                    <input type="text" class="conta-search" placeholder="Buscar conta...">
-                    <select class="conta" required>
-                        <option value="">Selecione a conta</option>
-                    </select>
+                    <input type="text" class="conta-input" placeholder="Digite para buscar conta..." autocomplete="off">
+                    <div class="sugestoes-container" style="display: none;">
+                        <div class="sugestoes-lista"></div>
+                    </div>
+                    <input type="hidden" class="conta-selecionada">
                 </div>
                 <input type="number" placeholder="Valor" class="valor" step="0.01" min="0" required>
                 <button type="button" class="remove-lancamento" onclick="sistemaBalancete.removerLancamento(this)">❌</button>
