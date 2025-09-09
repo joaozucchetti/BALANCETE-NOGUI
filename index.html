@@ -13,11 +13,21 @@
         <header>
             <h1>📊 Sistema de Balancete</h1>
             <p>Sistema para lançamento e validação de balancetes contábeis</p>
+            <div id="system-status" class="system-status">🔄 Inicializando sistema...</div>
         </header>
 
         <main>
-            <!-- Formulário para novo balancete -->
-            <section class="balancete-form">
+            <!-- Navegação por Abas -->
+            <nav class="tabs-navigation">
+                <button class="tab-button active" data-tab="balancete">📊 Balancete</button>
+                <button class="tab-button" data-tab="encargos">👥 Cálculo de Encargos</button>
+                <button class="tab-button" data-tab="rescisao">💼 Cálculo de Rescisão</button>
+            </nav>
+
+            <!-- Aba Balancete -->
+            <section id="tab-balancete" class="tab-content active">
+                <!-- Formulário para novo balancete -->
+                <section class="balancete-form">
                 <h2>Novo Balancete</h2>
                 <form id="balanceteForm">
                     <div class="form-group">
@@ -86,6 +96,174 @@
                 <div id="historico-container">
                     <p class="empty-state">Nenhum balancete lançado ainda.</p>
                 </div>
+            </section>
+            </section>
+
+            <!-- Aba Cálculo de Encargos -->
+            <section id="tab-encargos" class="tab-content">
+                <section class="encargos-form">
+                    <h2>Cálculo de Encargos Trabalhistas</h2>
+                    <form id="encargosForm">
+                        <div class="funcionario-dados">
+                            <div class="form-group">
+                                <label for="nomeFuncionario">Nome do Funcionário:</label>
+                                <input type="text" id="nomeFuncionario" placeholder="Nome completo" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="salarioBruto">Salário Bruto Mensal:</label>
+                                <input type="text" id="salarioBruto" placeholder="R$ 0,00" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="dataAdmissao">Data de Admissão:</label>
+                                <input type="date" id="dataAdmissao" required>
+                            </div>
+                        </div>
+
+                        <div class="parametros-encargos">
+                            <h3>Parâmetros dos Encargos (%)</h3>
+                            <div class="parametros-grid">
+                                <div class="form-group">
+                                    <label for="inssPatronal">INSS Patronal:</label>
+                                    <input type="number" id="inssPatronal" value="20" step="0.1" min="0" max="100">
+                                    <small>Padrão: 20%</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="fgts">FGTS:</label>
+                                    <input type="number" id="fgts" value="8" step="0.1" min="0" max="100" readonly>
+                                    <small>Fixo: 8%</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="rat">RAT (Risco):</label>
+                                    <input type="number" id="rat" value="2" step="0.1" min="0" max="100">
+                                    <small>1% a 3% conforme risco</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="terceiros">Sistema S (Terceiros):</label>
+                                    <input type="number" id="terceiros" value="5.8" step="0.1" min="0" max="100">
+                                    <small>5% a 6% por setor</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="button" onclick="calcularEncargos()">🧮 Calcular Encargos</button>
+                            <button type="button" onclick="gerarLancamentos()">📊 Gerar Lançamentos</button>
+                            <button type="button" onclick="limparEncargos()">🗑️ Limpar</button>
+                        </div>
+                    </form>
+                </section>
+
+                <!-- Resultado dos Cálculos -->
+                <section class="resultado-encargos">
+                    <h3>Resultado dos Cálculos</h3>
+                    <div id="resultado-container" class="resultado-grid">
+                        <p class="empty-state">Preencha os dados e clique em "Calcular Encargos"</p>
+                    </div>
+                </section>
+            </section>
+
+            <!-- Aba Cálculo de Rescisão -->
+            <section id="tab-rescisao" class="tab-content">
+                <section class="rescisao-form">
+                    <h2>Cálculo de Rescisão Trabalhista</h2>
+                    <form id="rescisaoForm">
+                        <div class="funcionario-dados-rescisao">
+                            <div class="form-group">
+                                <label for="nomeFuncionarioRescisao">Nome do Funcionário:</label>
+                                <input type="text" id="nomeFuncionarioRescisao" placeholder="Nome completo" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="salarioRescisao">Último Salário:</label>
+                                <input type="text" id="salarioRescisao" placeholder="R$ 0,00" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="dataAdmissaoRescisao">Data de Admissão:</label>
+                                <input type="date" id="dataAdmissaoRescisao" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="dataRescisao">Data da Rescisão:</label>
+                                <input type="date" id="dataRescisao" required>
+                            </div>
+                        </div>
+
+                        <div class="tipo-rescisao">
+                            <h3>Tipo de Rescisão</h3>
+                            <div class="tipo-rescisao-options">
+                                <label class="radio-option">
+                                    <input type="radio" name="tipoRescisao" value="demissao-sem-justa-causa" checked>
+                                    <span>Demissão sem justa causa</span>
+                                </label>
+                                <label class="radio-option">
+                                    <input type="radio" name="tipoRescisao" value="demissao-justa-causa">
+                                    <span>Demissão por justa causa</span>
+                                </label>
+                                <label class="radio-option">
+                                    <input type="radio" name="tipoRescisao" value="pedido-demissao">
+                                    <span>Pedido de demissão</span>
+                                </label>
+                                <label class="radio-option">
+                                    <input type="radio" name="tipoRescisao" value="acordo-mutuo">
+                                    <span>Acordo mútuo</span>
+                                </label>
+                                <label class="radio-option">
+                                    <input type="radio" name="tipoRescisao" value="termino-contrato">
+                                    <span>Término de contrato</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="informacoes-adicionais">
+                            <h3>Informações Adicionais</h3>
+                            <div class="info-grid">
+                                <div class="form-group">
+                                    <label for="avisoPrevio">Aviso Prévio (dias):</label>
+                                    <input type="number" id="avisoPrevio" value="30" min="0" max="90">
+                                    <small>Padrão: 30 dias</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="ferias">Férias Vencidas (dias):</label>
+                                    <input type="number" id="ferias" value="0" min="0" max="30">
+                                    <small>Dias de férias não gozadas</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="feriasProporcionais">Férias Proporcionais:</label>
+                                    <input type="checkbox" id="feriasProporcionais" checked>
+                                    <small>Calcular proporcionalmente</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="decimoTerceiro">13º Proporcional:</label>
+                                    <input type="checkbox" id="decimoTerceiro" checked>
+                                    <small>Calcular proporcionalmente</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="multa40">Multa 40% FGTS:</label>
+                                    <input type="checkbox" id="multa40" checked>
+                                    <small>Demissão sem justa causa</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="seguroDesemprego">Direito ao Seguro Desemprego:</label>
+                                    <input type="checkbox" id="seguroDesemprego">
+                                    <small>Conforme legislação</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="button" onclick="calcularRescisao()">🧮 Calcular Rescisão</button>
+                            <button type="button" onclick="gerarPDFRescisao()">📄 Gerar PDF</button>
+                            <button type="button" onclick="gerarLancamentosRescisao()">📊 Gerar Lançamentos</button>
+                            <button type="button" onclick="limparRescisao()">🗑️ Limpar</button>
+                        </div>
+                    </form>
+                </section>
+
+                <!-- Resultado dos Cálculos de Rescisão -->
+                <section class="resultado-rescisao">
+                    <h3>Resultado dos Cálculos de Rescisão</h3>
+                    <div id="resultado-rescisao-container" class="resultado-grid">
+                        <p class="empty-state">Preencha os dados e clique em "Calcular Rescisão"</p>
+                    </div>
+                </section>
             </section>
         </main>
     </div>

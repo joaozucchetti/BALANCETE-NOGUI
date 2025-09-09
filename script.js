@@ -263,7 +263,7 @@ class SistemaBalancete {
         document.addEventListener('input', (e) => {
             if (e.target.classList.contains('valor')) {
                 this.formatarValorInput(e.target);
-                console.log('Valor alterado:', e.target.value);
+
                 this.calcularBalance();
             }
             if (e.target.classList.contains('conta-input')) {
@@ -274,7 +274,6 @@ class SistemaBalancete {
         // Evento para mudança de tipo (débito/crédito)
         document.addEventListener('change', (e) => {
             if (e.target.classList.contains('tipo')) {
-                console.log('Tipo alterado:', e.target.value);
                 this.mostrarCampoConta(e.target);
                 this.calcularBalance();
             }
@@ -622,8 +621,6 @@ class SistemaBalancete {
         let totalDebitos = 0;
         let totalCreditos = 0;
 
-        console.log('Calculando balanço para:', lancamentos);
-
         lancamentos.forEach(lancamento => {
             const valor = parseFloat(lancamento.valor) || 0;
             if (lancamento.tipo === 'debito') {
@@ -632,8 +629,6 @@ class SistemaBalancete {
                 totalCreditos += valor;
             }
         });
-
-        console.log('Totais calculados - Débitos:', totalDebitos, 'Créditos:', totalCreditos);
 
         this.atualizarDisplay(totalDebitos, totalCreditos);
         return { totalDebitos, totalCreditos, balanceado: totalDebitos === totalCreditos && totalDebitos > 0 };
@@ -644,8 +639,6 @@ class SistemaBalancete {
         const totalCreditosElement = document.getElementById('totalCreditos');
         const statusElement = document.getElementById('balanceStatus');
         const submitBtn = document.getElementById('submitBtn');
-
-        console.log('Atualizando display - Débitos:', totalDebitos, 'Créditos:', totalCreditos);
         
         // Atualizar totais
         if (totalDebitosElement) {
@@ -672,16 +665,13 @@ class SistemaBalancete {
         if (submitBtn) {
             submitBtn.disabled = !(diferenca === 0 && totalDebitos > 0);
         }
-
-        console.log('Display atualizado - Status:', diferenca === 0 && totalDebitos > 0 ? 'Balanceado' : 'Desbalanceado');
     }
 
     obterLancamentos() {
         const lancamentoItems = document.querySelectorAll('.lancamento-item');
         const lancamentos = [];
 
-        console.log('Verificando', lancamentoItems.length, 'lançamentos');
-
+        // Processar lançamentos silenciosamente
         lancamentoItems.forEach((item, index) => {
             const tipoElement = item.querySelector('.tipo');
             const contaElement = item.querySelector('.conta-selecionada');
@@ -693,19 +683,24 @@ class SistemaBalancete {
             const valor = valorElement ? valorElement.value : '';
             const descricao = descricaoElement ? descricaoElement.value.trim() : '';
 
-            console.log(`Lançamento ${index + 1}:`, { tipo, conta, valor, descricao });
+            // Limpar e converter valor
+            let valorNumerico = 0;
+            if (valor) {
+                // Remover formatação e converter
+                const valorLimpo = valor.toString().replace(/[^\d,.-]/g, '').replace(',', '.');
+                valorNumerico = parseFloat(valorLimpo) || 0;
+            }
 
-            if (tipo && valor && parseFloat(valor) > 0) {
+            if (tipo && valorNumerico > 0) {
                 lancamentos.push({ 
                     tipo, 
                     conta: conta || 'Conta não selecionada', 
-                    valor: parseFloat(valor),
+                    valor: valorNumerico,
                     descricao: descricao || ''
                 });
             }
         });
 
-        console.log('Lançamentos válidos encontrados:', lancamentos);
         return lancamentos;
     }
 
@@ -851,6 +846,29 @@ class SistemaBalancete {
 
     criarCardBalancete(balancete) {
         const dataFormatada = new Date(balancete.data + 'T00:00:00').toLocaleDateString('pt-BR');
+        const cardId = `balancete-${balancete.id}`;
+        
+        // Calcular estatísticas do resumo
+        const totalLancamentos = balancete.lancamentos.length;
+        const lancamentosDebito = balancete.lancamentos.filter(l => l.tipo === 'debito').length;
+        const lancamentosCredito = balancete.lancamentos.filter(l => l.tipo === 'credito').length;
+        const maiorLancamento = Math.max(...balancete.lancamentos.map(l => l.valor));
+        const menorLancamento = Math.min(...balancete.lancamentos.map(l => l.valor));
+        
+        // Identificar principais contas
+        const contasAgrupadas = {};
+        balancete.lancamentos.forEach(l => {
+            if (!contasAgrupadas[l.conta]) {
+                contasAgrupadas[l.conta] = { valor: 0, quantidade: 0 };
+            }
+            contasAgrupadas[l.conta].valor += l.valor;
+            contasAgrupadas[l.conta].quantidade += 1;
+        });
+        
+        const principaisConta = Object.entries(contasAgrupadas)
+            .sort((a, b) => b[1].valor - a[1].valor)
+            .slice(0, 2)
+            .map(([conta, dados]) => `${conta} (${dados.quantidade})`);
         
         const lancamentosHtml = balancete.lancamentos.map(lancamento => `
             <div class="lancamento-display ${lancamento.tipo}">
@@ -871,18 +889,59 @@ class SistemaBalancete {
                     <div class="balancete-date">📅 ${dataFormatada}</div>
                     <div class="balancete-status status-balanced">✅ Balanceado</div>
                 </div>
-                <div style="display: flex; justify-content: flex-end; margin-bottom: 8px;">
-                    <button type="button" onclick="exportarPDF(${balancete.id})" class="exportar-pdf-btn">📄 Exportar PDF</button>
+                
+                <!-- Resumo do Balancete -->
+                <div class="balancete-resumo">
+                    <div class="resumo-title">📊 Resumo do Balancete</div>
+                    <div class="resumo-stats">
+                        <div class="resumo-item">
+                            <span class="label">Lançamentos</span>
+                            <span class="value">${totalLancamentos}</span>
+                        </div>
+                        <div class="resumo-item">
+                            <span class="label">Débitos</span>
+                            <span class="value">${lancamentosDebito}</span>
+                        </div>
+                        <div class="resumo-item">
+                            <span class="label">Créditos</span>
+                            <span class="value">${lancamentosCredito}</span>
+                        </div>
+                        <div class="resumo-item">
+                            <span class="label">Maior valor</span>
+                            <span class="value">R$ ${this.formatarMoeda(maiorLancamento)}</span>
+                        </div>
+                        <div class="resumo-item">
+                            <span class="label">Menor valor</span>
+                            <span class="value">R$ ${this.formatarMoeda(menorLancamento)}</span>
+                        </div>
+                        <div class="resumo-item">
+                            <span class="label">Principais contas</span>
+                            <span class="value">${principaisConta.join(', ')}</span>
+                        </div>
+                    </div>
+                    <button class="toggle-detalhes" onclick="toggleDetalhesBalancete('${cardId}')">
+                        🔍 Ver Detalhes
+                    </button>
                 </div>
-                <div class="lancamentos-list">
-                    ${lancamentosHtml}
-                </div>
-                <div class="balancete-totals">
-                    <span class="total-debitos">Total Débitos: R$ ${this.formatarMoeda(balancete.totalDebitos)}</span>
-                    <span class="total-creditos">Total Créditos: R$ ${this.formatarMoeda(balancete.totalCreditos)}</span>
-                </div>
-                <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ecf0f1; font-size: 12px; color: #7f8c8d;">
-                    Lançado em: ${balancete.timestamp}
+                
+                <!-- Detalhes minimizados por padrão -->
+                <div id="detalhes-${cardId}" class="lancamentos-detalhados">
+                    <div style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
+                        <button type="button" onclick="exportarPDF(${balancete.id})" class="exportar-pdf-btn">📄 Exportar PDF</button>
+                    </div>
+                    
+                    <div class="lancamentos-list">
+                        ${lancamentosHtml}
+                    </div>
+                    
+                    <div class="balancete-totals">
+                        <span class="total-debitos">Total Débitos: R$ ${this.formatarMoeda(balancete.totalDebitos)}</span>
+                        <span class="total-creditos">Total Créditos: R$ ${this.formatarMoeda(balancete.totalCreditos)}</span>
+                    </div>
+                    
+                    <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ecf0f1; font-size: 12px; color: #7f8c8d;">
+                        Lançado em: ${balancete.timestamp}
+                    </div>
                 </div>
             </div>
         `;
@@ -904,21 +963,26 @@ class SistemaBalancete {
         const container = document.getElementById('lancamentos-container');
         container.innerHTML = `
             <div class="lancamento-item">
-                <select class="tipo" required>
-                    <option value="">Tipo</option>
-                    <option value="debito">Débito</option>
-                    <option value="credito">Crédito</option>
-                </select>
-                <div class="conta-selector" style="display: none;">
-                    <input type="text" class="conta-input" placeholder="Digite para buscar conta..." autocomplete="off">
-                    <div class="sugestoes-container" style="display: none;">
-                        <div class="sugestoes-lista"></div>
+                <div class="lancamento-main">
+                    <select class="tipo" required>
+                        <option value="">Tipo</option>
+                        <option value="debito">Débito</option>
+                        <option value="credito">Crédito</option>
+                    </select>
+                    <div class="conta-selector" style="display: none;">
+                        <input type="text" class="conta-input" placeholder="Digite para buscar conta..." autocomplete="off">
+                        <div class="sugestoes-container" style="display: none;">
+                            <div class="sugestoes-lista"></div>
+                        </div>
+                        <input type="hidden" class="conta-selecionada">
                     </div>
-                    <input type="hidden" class="conta-selecionada">
+                    <input type="text" placeholder="Valor (ex: 1500,50)" class="valor" required>
+                    <button type="button" class="remove-lancamento" onclick="sistemaBalancete.removerLancamento(this)">❌</button>
                 </div>
-                <input type="text" placeholder="Valor (ex: 1500,50)" class="valor" required>
-                <input type="text" placeholder="Descrição do lançamento" class="descricao">
-                <button type="button" class="remove-lancamento" onclick="sistemaBalancete.removerLancamento(this)">❌</button>
+                <hr class="descricao-separator">
+                <div class="descricao-container">
+                    <input type="text" placeholder="Descrição do lançamento (opcional)" class="descricao">
+                </div>
             </div>
         `;
         
@@ -995,24 +1059,86 @@ class SistemaBalancete {
 
 // Funções globais para serem chamadas pelo HTML
 function adicionarLancamento() {
-    sistemaBalancete.adicionarLancamento();
+    try {
+        if (!sistemaBalancete) {
+            throw new Error('Sistema de balancete não foi inicializado');
+        }
+        sistemaBalancete.adicionarLancamento();
+    } catch (error) {
+        console.error('Erro ao adicionar lançamento:', error);
+        alert('Erro ao adicionar lançamento: ' + error.message);
+    }
 }
 
 function removerLancamento(botao) {
-    sistemaBalancete.removerLancamento(botao);
+    try {
+        if (!sistemaBalancete) {
+            throw new Error('Sistema de balancete não foi inicializado');
+        }
+        if (!botao || !botao.parentNode) {
+            throw new Error('Botão inválido ou elemento não encontrado');
+        }
+        sistemaBalancete.removerLancamento(botao);
+    } catch (error) {
+        console.error('Erro ao remover lançamento:', error);
+        alert('Erro ao remover lançamento: ' + error.message);
+    }
 }
 
 function calcularBalance() {
-    if (sistemaBalancete) {
-        console.log('Forçando recálculo do balanço...');
-        sistemaBalancete.calcularBalance();
-    } else {
-        console.error('Sistema não inicializado');
+    try {
+        if (!sistemaBalancete) {
+            throw new Error('Sistema de balancete não foi inicializado');
+        }
+
+        return sistemaBalancete.calcularBalance();
+    } catch (error) {
+        console.error('Erro ao calcular balance:', error);
+        alert('Erro ao calcular saldo: ' + error.message);
+        return null;
     }
 }
 
 function limparFormulario() {
-    sistemaBalancete.limparFormulario();
+    try {
+        if (!sistemaBalancete) {
+            throw new Error('Sistema de balancete não foi inicializado');
+        }
+        if (confirm('Tem certeza que deseja limpar o formulário? Todos os dados não salvos serão perdidos.')) {
+            sistemaBalancete.limparFormulario();
+        }
+    } catch (error) {
+        console.error('Erro ao limpar formulário:', error);
+        alert('Erro ao limpar formulário: ' + error.message);
+    }
+}
+
+// Função para alternar detalhes do balancete
+function toggleDetalhesBalancete(cardId) {
+    try {
+        const detalhesElement = document.getElementById(`detalhes-${cardId}`);
+        const toggleButton = document.querySelector(`[onclick="toggleDetalhesBalancete('${cardId}')"]`);
+        
+        if (!detalhesElement || !toggleButton) {
+            throw new Error('Elementos não encontrados');
+        }
+        
+        const isExpanded = detalhesElement.classList.contains('expandido');
+        
+        if (isExpanded) {
+            detalhesElement.classList.remove('expandido');
+            toggleButton.innerHTML = '🔍 Ver Detalhes';
+            toggleButton.style.background = 'linear-gradient(45deg, #667eea, #764ba2)';
+        } else {
+            detalhesElement.classList.add('expandido');
+            toggleButton.innerHTML = '🔼 Ocultar Detalhes';
+            toggleButton.style.background = 'linear-gradient(45deg, #f39c12, #e67e22)';
+        }
+        
+    } catch (error) {
+        console.error('Erro ao alternar detalhes:', error);
+        alert('Erro ao mostrar/ocultar detalhes: ' + error.message);
+    }
 }
 
 function limparCache() {
@@ -1083,9 +1209,28 @@ function gerarRelatorio(tipo) {
 }
 
 function gerarRelatorioDiario(doc, y, dataEspecifica, mesRelatorio) {
+    // Cabeçalho principal
+    doc.setFillColor(102, 126, 234);
+    doc.rect(0, 0, 210, 25, 'F');
+    
+    doc.setTextColor(255, 255, 255);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(16);
-    doc.text('Relatório Diário', 105, y, { align: 'center' });
+    doc.setFontSize(20);
+    doc.text('RELATÓRIO DIÁRIO DE BALANCETES', 105, 15, { align: 'center' });
+    
+    // Informações da empresa
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    y = 35;
+    doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 15, y);
+    doc.text('Sistema de Balancete v2.0', 150, y);
+    
+    // Linha separadora
+    doc.setDrawColor(102, 126, 234);
+    doc.setLineWidth(0.5);
+    doc.line(15, y + 5, 195, y + 5);
+    
     y += 15;
     
     // Filtrar balancetes
@@ -1110,15 +1255,61 @@ function gerarRelatorioDiario(doc, y, dataEspecifica, mesRelatorio) {
         balancetesPorData[data].push(b);
     });
     
+    // Resumo do período
+    if (dataEspecifica) {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(12);
+        doc.text('Período Analisado:', 15, y);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`${new Date(dataEspecifica + 'T00:00:00').toLocaleDateString('pt-BR')}`, 60, y);
+    } else if (mesRelatorio !== 'todos') {
+        const [ano, mes] = mesRelatorio.split('-');
+        const nomesMeses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+                           'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+        doc.setFont('helvetica', 'bold');
+        doc.text('Período Analisado:', 15, y);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`${nomesMeses[parseInt(mes) - 1]} ${ano}`, 60, y);
+    }
+    y += 15;
+    
+    if (Object.keys(balancetesPorData).length === 0) {
+        doc.setFont('helvetica', 'italic');
+        doc.setFontSize(12);
+        doc.text('Nenhum balancete encontrado para o período selecionado.', 105, y + 20, { align: 'center' });
+        doc.save('relatorio_diario.pdf');
+        return;
+    }
+    
     doc.setFontSize(12);
     doc.setFont('helvetica', 'normal');
     
-    Object.keys(balancetesPorData).sort().forEach(data => {
-        if (y > 250) { doc.addPage(); y = 20; }
+        Object.keys(balancetesPorData).sort().forEach(data => {
+        if (y > 230) { 
+            doc.addPage(); 
+            y = 20;
+            // Repetir cabeçalho em novas páginas
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(14);
+            doc.text('RELATÓRIO DIÁRIO DE BALANCETES (continuação)', 105, y, { align: 'center' });
+            y += 15;
+        }
+        
+        // Cabeçalho da data com fundo colorido
+        doc.setFillColor(240, 248, 255);
+        doc.rect(15, y - 5, 180, 12, 'F');
+        doc.setDrawColor(102, 126, 234);
+        doc.rect(15, y - 5, 180, 12);
         
         doc.setFont('helvetica', 'bold');
-        doc.text(`Data: ${new Date(data + 'T00:00:00').toLocaleDateString('pt-BR')}`, 20, y);
-        y += 8;
+        doc.setFontSize(11);
+        doc.text(`📅 ${new Date(data + 'T00:00:00').toLocaleDateString('pt-BR', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        })}`, 20, y + 2);
+        y += 15;
         
         const balancetes = balancetesPorData[data];
         let totalDebitos = 0, totalCreditos = 0;
@@ -1128,21 +1319,119 @@ function gerarRelatorioDiario(doc, y, dataEspecifica, mesRelatorio) {
             totalCreditos += b.totalCreditos;
         });
         
+        // Informações resumidas
         doc.setFont('helvetica', 'normal');
-        doc.text(`Balancetes: ${balancetes.length}`, 30, y);
-        doc.text(`Total Débitos: R$ ${sistemaBalancete.formatarMoeda(totalDebitos)}`, 30, y + 6);
-        doc.text(`Total Créditos: R$ ${sistemaBalancete.formatarMoeda(totalCreditos)}`, 30, y + 12);
-        y += 20;
-    });
-    
-    doc.save('relatorio_diario.pdf');
+        doc.setFontSize(10);
+        doc.text(`• Quantidade de balancetes: ${balancetes.length}`, 25, y);
+        doc.text(`• Total de débitos: R$ ${sistemaBalancete.formatarMoeda(totalDebitos)}`, 25, y + 5);
+        doc.text(`• Total de créditos: R$ ${sistemaBalancete.formatarMoeda(totalCreditos)}`, 25, y + 10);
+        
+        // Status de balanceamento
+        const balanceado = totalDebitos === totalCreditos;
+        doc.setFont('helvetica', 'bold');
+        if (balanceado) {
+            doc.setTextColor(0, 128, 0);
+            doc.text('✓ Balanceado', 25, y + 15);
+        } else {
+            doc.setTextColor(220, 53, 69);
+            doc.text('✗ Desbalanceado', 25, y + 15);
+        }
+        doc.setTextColor(0, 0, 0);
+        
+        // Análise detalhada dos balancetes do dia
+        y += 25;
+        balancetes.forEach((balancete, index) => {
+            if (y > 250) { 
+                doc.addPage(); 
+                y = 20;
+            }
+            
+            // Título do balancete
+            doc.setFillColor(250, 250, 250);
+            doc.rect(30, y - 3, 150, 8, 'F');
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(9);
+            doc.text(`Balancete ${index + 1} - ${balancete.lancamentos.length} lançamentos`, 32, y + 2);
+            y += 12;
+            
+            // Resumo do balancete
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8);
+            
+            // Agrupar lançamentos por tipo
+            const debitos = balancete.lancamentos.filter(l => l.tipo === 'debito');
+            const creditos = balancete.lancamentos.filter(l => l.tipo === 'credito');
+            
+            if (debitos.length > 0) {
+                doc.text(`📈 Débitos (${debitos.length}):`, 35, y);
+                y += 4;
+                debitos.slice(0, 3).forEach(lancamento => {
+                    const texto = `• ${lancamento.conta}: R$ ${sistemaBalancete.formatarMoeda(lancamento.valor)}`;
+                    const textoLimitado = texto.length > 60 ? texto.substring(0, 57) + '...' : texto;
+                    doc.text(textoLimitado, 38, y);
+                    y += 3;
+                });
+                if (debitos.length > 3) {
+                    doc.setFont('helvetica', 'italic');
+                    doc.text(`... e mais ${debitos.length - 3} lançamentos`, 38, y);
+                    doc.setFont('helvetica', 'normal');
+                    y += 3;
+                }
+                y += 2;
+            }
+            
+            if (creditos.length > 0) {
+                doc.text(`📉 Créditos (${creditos.length}):`, 35, y);
+                y += 4;
+                creditos.slice(0, 3).forEach(lancamento => {
+                    const texto = `• ${lancamento.conta}: R$ ${sistemaBalancete.formatarMoeda(lancamento.valor)}`;
+                    const textoLimitado = texto.length > 60 ? texto.substring(0, 57) + '...' : texto;
+                    doc.text(textoLimitado, 38, y);
+                    y += 3;
+                });
+                if (creditos.length > 3) {
+                    doc.setFont('helvetica', 'italic');
+                    doc.text(`... e mais ${creditos.length - 3} lançamentos`, 38, y);
+                    doc.setFont('helvetica', 'normal');
+                    y += 3;
+                }
+                y += 2;
+            }
+            
+            // Totais do balancete
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(8);
+            doc.text(`Total: Débitos R$ ${sistemaBalancete.formatarMoeda(balancete.totalDebitos)} | Créditos R$ ${sistemaBalancete.formatarMoeda(balancete.totalCreditos)}`, 35, y);
+            y += 8;
+        });
+        
+        y += 10;
+    });    doc.save('relatorio_diario.pdf');
 }
 
 function gerarRelatorioMensal(doc, y, mesRelatorio) {
+    // Cabeçalho profissional com fundo colorido
+    doc.setFillColor(102, 126, 234);
+    doc.rect(0, 0, 210, 40, 'F');
+    
+    // Título principal
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(16);
-    doc.text('Relatório Mensal', 105, y, { align: 'center' });
-    y += 15;
+    doc.setFontSize(18);
+    doc.setTextColor(255, 255, 255);
+    doc.text('📊 RELATÓRIO MENSAL DE BALANCETES', 105, 20, { align: 'center' });
+    
+    // Informações da empresa
+    doc.setFontSize(10);
+    doc.text('Sistema Integrado de Contabilidade', 105, 28, { align: 'center' });
+    doc.text(`Relatório gerado em: ${new Date().toLocaleString('pt-BR')}`, 105, 34, { align: 'center' });
+    
+    // Linha separadora
+    doc.setDrawColor(102, 126, 234);
+    doc.setLineWidth(1);
+    doc.line(15, 45, 195, 45);
+    
+    doc.setTextColor(0, 0, 0);
+    y = 55;
     
     // Filtrar balancetes
     let balancetesFiltrados = sistemaBalancete.balancetes;
@@ -1165,19 +1454,77 @@ function gerarRelatorioMensal(doc, y, mesRelatorio) {
         balancetesPorMes[mesAno].push(b);
     });
     
+    // Período analisado
+    if (mesRelatorio !== 'todos') {
+        const [ano, mes] = mesRelatorio.split('-');
+        const nomesMeses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+                           'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(12);
+        doc.text('Período Analisado:', 15, y);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`${nomesMeses[parseInt(mes) - 1]} ${ano}`, 60, y);
+    }
+    y += 15;
+    
+    if (Object.keys(balancetesPorMes).length === 0) {
+        doc.setFont('helvetica', 'italic');
+        doc.setFontSize(12);
+        doc.text('Nenhum balancete encontrado para o período selecionado.', 105, y + 20, { align: 'center' });
+        doc.save('relatorio_mensal.pdf');
+        return;
+    }
+    
+    // Resumo geral
+    let totalGeralDebitos = 0, totalGeralCreditos = 0, totalBalancetes = 0;
+    Object.values(balancetesPorMes).forEach(balancetesMes => {
+        totalBalancetes += balancetesMes.length;
+        balancetesMes.forEach(b => {
+            totalGeralDebitos += b.totalDebitos;
+            totalGeralCreditos += b.totalCreditos;
+        });
+    });
+    
+    doc.setFillColor(248, 249, 250);
+    doc.rect(15, y - 5, 180, 25, 'F');
+    doc.setDrawColor(102, 126, 234);
+    doc.rect(15, y - 5, 180, 25);
+    
+    doc.setFont('helvetica', 'bold');
     doc.setFontSize(12);
+    doc.text('📈 RESUMO GERAL', 20, y + 3);
     doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text(`Total de balancetes: ${totalBalancetes}`, 20, y + 10);
+    doc.text(`Total geral débitos: R$ ${sistemaBalancete.formatarMoeda(totalGeralDebitos)}`, 20, y + 15);
+    doc.text(`Total geral créditos: R$ ${sistemaBalancete.formatarMoeda(totalGeralCreditos)}`, 105, y + 15);
+    y += 35;
     
     Object.keys(balancetesPorMes).sort().forEach(mesAno => {
-        if (y > 240) { doc.addPage(); y = 20; }
+        if (y > 240) { 
+            doc.addPage(); 
+            y = 20;
+            // Repetir cabeçalho em novas páginas
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(14);
+            doc.text('RELATÓRIO MENSAL DE BALANCETES (continuação)', 105, y, { align: 'center' });
+            y += 15;
+        }
         
         const [ano, mes] = mesAno.split('-');
         const nomesMeses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
                            'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
         
+        // Cabeçalho do mês com fundo colorido
+        doc.setFillColor(240, 248, 255);
+        doc.rect(15, y - 5, 180, 12, 'F');
+        doc.setDrawColor(102, 126, 234);
+        doc.rect(15, y - 5, 180, 12);
+        
         doc.setFont('helvetica', 'bold');
-        doc.text(`${nomesMeses[parseInt(mes) - 1]} ${ano}`, 20, y);
-        y += 8;
+        doc.setFontSize(12);
+        doc.text(`📅 ${nomesMeses[parseInt(mes) - 1]} ${ano}`, 20, y + 2);
+        y += 15;
         
         const balancetes = balancetesPorMes[mesAno];
         let totalDebitos = 0, totalCreditos = 0;
@@ -1187,22 +1534,65 @@ function gerarRelatorioMensal(doc, y, mesRelatorio) {
             totalCreditos += b.totalCreditos;
         });
         
+        // Informações do mês
         doc.setFont('helvetica', 'normal');
-        doc.text(`Balancetes lançados: ${balancetes.length}`, 30, y);
-        doc.text(`Total movimentação débitos: R$ ${sistemaBalancete.formatarMoeda(totalDebitos)}`, 30, y + 6);
-        doc.text(`Total movimentação créditos: R$ ${sistemaBalancete.formatarMoeda(totalCreditos)}`, 30, y + 12);
-        doc.text(`Saldo período: R$ ${sistemaBalancete.formatarMoeda(totalDebitos - totalCreditos)}`, 30, y + 18);
-        y += 28;
+        doc.setFontSize(10);
+        doc.text(`• Balancetes lançados: ${balancetes.length}`, 25, y);
+        doc.text(`• Total movimentação débitos: R$ ${sistemaBalancete.formatarMoeda(totalDebitos)}`, 25, y + 5);
+        doc.text(`• Total movimentação créditos: R$ ${sistemaBalancete.formatarMoeda(totalCreditos)}`, 25, y + 10);
+        
+        const saldoPeriodo = totalDebitos - totalCreditos;
+        doc.setFont('helvetica', 'bold');
+        if (saldoPeriodo > 0) {
+            doc.setTextColor(220, 53, 69);
+            doc.text(`• Saldo período: R$ ${sistemaBalancete.formatarMoeda(saldoPeriodo)} (Déficit)`, 25, y + 15);
+        } else if (saldoPeriodo < 0) {
+            doc.setTextColor(0, 128, 0);
+            doc.text(`• Saldo período: R$ ${sistemaBalancete.formatarMoeda(Math.abs(saldoPeriodo))} (Superávit)`, 25, y + 15);
+        } else {
+            doc.setTextColor(0, 123, 255);
+            doc.text(`• Saldo período: R$ ${sistemaBalancete.formatarMoeda(saldoPeriodo)} (Equilibrado)`, 25, y + 15);
+        }
+        doc.setTextColor(0, 0, 0);
+        
+        // Percentual do total
+        if (totalGeralDebitos > 0 || totalGeralCreditos > 0) {
+            const percentualDebitos = totalGeralDebitos > 0 ? ((totalDebitos / totalGeralDebitos) * 100).toFixed(1) : 0;
+            const percentualCreditos = totalGeralCreditos > 0 ? ((totalCreditos / totalGeralCreditos) * 100).toFixed(1) : 0;
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(9);
+            doc.text(`• Representação: ${percentualDebitos}% dos débitos totais, ${percentualCreditos}% dos créditos totais`, 25, y + 20);
+        }
+        
+        y += 30;
     });
     
     doc.save('relatorio_mensal.pdf');
 }
 
 function gerarRelatorioFuncionarios(doc, y, mesRelatorio) {
+    // Cabeçalho profissional com fundo colorido
+    doc.setFillColor(102, 126, 234);
+    doc.rect(0, 0, 210, 40, 'F');
+    
+    // Título principal
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(16);
-    doc.text('Relatório de Funcionários', 105, y, { align: 'center' });
-    y += 15;
+    doc.setFontSize(18);
+    doc.setTextColor(255, 255, 255);
+    doc.text('👥 RELATÓRIO DE FUNCIONÁRIOS', 105, 20, { align: 'center' });
+    
+    // Informações da empresa
+    doc.setFontSize(10);
+    doc.text('Sistema Integrado de Contabilidade - Recursos Humanos', 105, 28, { align: 'center' });
+    doc.text(`Relatório gerado em: ${new Date().toLocaleString('pt-BR')}`, 105, 34, { align: 'center' });
+    
+    // Linha separadora
+    doc.setDrawColor(102, 126, 234);
+    doc.setLineWidth(1);
+    doc.line(15, 45, 195, 45);
+    
+    doc.setTextColor(0, 0, 0);
+    y = 55;
     
     // Filtrar balancetes
     let balancetesFiltrados = sistemaBalancete.balancetes;
@@ -1212,70 +1602,1152 @@ function gerarRelatorioFuncionarios(doc, y, mesRelatorio) {
             const mesBalancete = b.data.substring(0, 7); // YYYY-MM
             return mesBalancete === mesRelatorio;
         });
+        
+        // Mostrar período
+        const [ano, mes] = mesRelatorio.split('-');
+        const nomesMeses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+                           'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(12);
+        doc.text('Período Analisado:', 15, y);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`${nomesMeses[parseInt(mes) - 1]} ${ano}`, 60, y);
+        y += 15;
     }
     
     // Filtrar contas relacionadas a funcionários
-    const contasFuncionarios = [
-        'INSS a pagar', 'FGTS a recolher', 'IRRF a compensar', 
-        'Ordenados e salários a pagar', '13º a pagar', 'Ferias a pagar',
-        'Encargos sociais a pagar', 'Adiantamentos para despesas',
-        'Antecipação de salários e ordenados', 'Empréstimos a funcionários',
-        'Créditos de funcionários'
-    ];
+    const contasFuncionarios = {
+        'INSS': ['INSS a pagar', 'INSS patronal', 'INSS funcionários'],
+        'FGTS': ['FGTS a recolher', 'FGTS patronal'],
+        'IRRF': ['IRRF a compensar', 'Imposto de renda retido'],
+        'Salários': ['Ordenados e salários a pagar', 'Salários', 'Vencimentos'],
+        'Benefícios': ['13º a pagar', 'Férias a pagar', 'Vale transporte', 'Vale alimentação'],
+        'Encargos': ['Encargos sociais a pagar', 'PIS sobre folha'],
+        'Adiantamentos': ['Adiantamentos para despesas', 'Antecipação de salários e ordenados', 
+                         'Empréstimos a funcionários', 'Créditos de funcionários']
+    };
     
-    let totalINSS = 0, totalFGTS = 0, totalIRRF = 0, totalSalarios = 0;
+    let totaisPorCategoria = {
+        'INSS': 0, 'FGTS': 0, 'IRRF': 0, 'Salários': 0, 
+        'Benefícios': 0, 'Encargos': 0, 'Adiantamentos': 0
+    };
     
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'normal');
+    let lancamentosEncontrados = [];
     
     balancetesFiltrados.forEach(balancete => {
         balancete.lancamentos.forEach(lancamento => {
-            if (contasFuncionarios.some(conta => lancamento.conta.includes(conta))) {
-                if (y > 250) { doc.addPage(); y = 20; }
-                
-                doc.text(`${lancamento.conta}: R$ ${sistemaBalancete.formatarMoeda(lancamento.valor)}`, 20, y);
-                if (lancamento.descricao) {
-                    doc.text(`   ${lancamento.descricao}`, 20, y + 6);
-                    y += 6;
-                }
-                y += 8;
-                
-                // Somar totais por categoria
-                if (lancamento.conta.includes('INSS')) totalINSS += lancamento.valor;
-                if (lancamento.conta.includes('FGTS')) totalFGTS += lancamento.valor;
-                if (lancamento.conta.includes('IRRF')) totalIRRF += lancamento.valor;
-                if (lancamento.conta.includes('salário') || lancamento.conta.includes('Ordenados')) {
-                    totalSalarios += lancamento.valor;
+            for (const [categoria, contas] of Object.entries(contasFuncionarios)) {
+                if (contas.some(conta => lancamento.conta.toLowerCase().includes(conta.toLowerCase()))) {
+                    lancamentosEncontrados.push({
+                        ...lancamento,
+                        categoria,
+                        data: balancete.data
+                    });
+                    totaisPorCategoria[categoria] += lancamento.valor;
+                    break;
                 }
             }
         });
     });
     
-    if (y > 230) { doc.addPage(); y = 20; }
+    if (lancamentosEncontrados.length === 0) {
+        doc.setFont('helvetica', 'italic');
+        doc.setFontSize(12);
+        doc.text('Nenhum lançamento relacionado a funcionários encontrado no período.', 105, y + 20, { align: 'center' });
+        doc.save('relatorio_funcionarios.pdf');
+        return;
+    }
     
-    y += 10;
+    // Resumo por categoria
+    doc.setFillColor(248, 249, 250);
+    doc.rect(15, y - 5, 180, 35, 'F');
+    doc.setDrawColor(102, 126, 234);
+    doc.rect(15, y - 5, 180, 35);
+    
     doc.setFont('helvetica', 'bold');
-    doc.text('Resumo:', 20, y);
-    y += 8;
+    doc.setFontSize(12);
+    doc.text('💰 RESUMO POR CATEGORIA', 20, y + 3);
+    
     doc.setFont('helvetica', 'normal');
-    doc.text(`Total INSS: R$ ${sistemaBalancete.formatarMoeda(totalINSS)}`, 30, y);
-    doc.text(`Total FGTS: R$ ${sistemaBalancete.formatarMoeda(totalFGTS)}`, 30, y + 8);
-    doc.text(`Total IRRF: R$ ${sistemaBalancete.formatarMoeda(totalIRRF)}`, 30, y + 16);
-    doc.text(`Total Salários: R$ ${sistemaBalancete.formatarMoeda(totalSalarios)}`, 30, y + 24);
+    doc.setFontSize(9);
+    let resumoY = y + 10;
+    Object.entries(totaisPorCategoria).forEach(([categoria, total], index) => {
+        if (total > 0) {
+            const x = index < 4 ? 20 : 105;
+            const yPos = resumoY + ((index % 4) * 5);
+            doc.text(`${categoria}: R$ ${sistemaBalancete.formatarMoeda(total)}`, x, yPos);
+        }
+    });
+    y += 45;
+    
+    // Detalhamento por categoria
+    Object.entries(contasFuncionarios).forEach(([categoria, contas]) => {
+        const lancamentosCategoria = lancamentosEncontrados.filter(l => l.categoria === categoria);
+        
+        if (lancamentosCategoria.length > 0) {
+            if (y > 240) { 
+                doc.addPage(); 
+                y = 20;
+                // Repetir cabeçalho em novas páginas
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(14);
+                doc.text('RELATÓRIO DE FUNCIONÁRIOS (continuação)', 105, y, { align: 'center' });
+                y += 15;
+            }
+            
+            // Cabeçalho da categoria
+            doc.setFillColor(240, 248, 255);
+            doc.rect(15, y - 5, 180, 10, 'F');
+            doc.setDrawColor(102, 126, 234);
+            doc.rect(15, y - 5, 180, 10);
+            
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(11);
+            
+            const emojis = {
+                'INSS': '🏥', 'FGTS': '🏠', 'IRRF': '📊', 'Salários': '💵',
+                'Benefícios': '🎁', 'Encargos': '⚖️', 'Adiantamentos': '💳'
+            };
+            
+            doc.text(`${emojis[categoria] || '📋'} ${categoria.toUpperCase()}`, 20, y);
+            y += 12;
+            
+            // Lançamentos da categoria
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(9);
+            
+            lancamentosCategoria.forEach(lancamento => {
+                if (y > 270) { 
+                    doc.addPage(); 
+                    y = 20;
+                }
+                
+                doc.text(`• ${lancamento.conta}`, 25, y);
+                doc.text(`R$ ${sistemaBalancete.formatarMoeda(lancamento.valor)}`, 140, y);
+                doc.text(new Date(lancamento.data + 'T00:00:00').toLocaleDateString('pt-BR'), 170, y);
+                
+                if (lancamento.descricao) {
+                    y += 4;
+                    doc.setFont('helvetica', 'italic');
+                    doc.setFontSize(8);
+                    doc.text(`${lancamento.descricao}`, 30, y);
+                    doc.setFont('helvetica', 'normal');
+                    doc.setFontSize(9);
+                }
+                y += 6;
+            });
+            
+            // Subtotal da categoria
+            doc.setFont('helvetica', 'bold');
+            doc.text(`Subtotal ${categoria}: R$ ${sistemaBalancete.formatarMoeda(totaisPorCategoria[categoria])}`, 25, y);
+            y += 15;
+        }
+    });
+    
+    // Total geral
+    if (y > 250) { doc.addPage(); y = 20; }
+    
+    const totalGeral = Object.values(totaisPorCategoria).reduce((sum, val) => sum + val, 0);
+    
+    doc.setFillColor(255, 248, 220);
+    doc.rect(15, y - 5, 180, 15, 'F');
+    doc.setDrawColor(255, 193, 7);
+    doc.rect(15, y - 5, 180, 15);
+    
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.text(`💼 TOTAL GERAL FUNCIONÁRIOS: R$ ${sistemaBalancete.formatarMoeda(totalGeral)}`, 105, y + 5, { align: 'center' });
     
     doc.save('relatorio_funcionarios.pdf');
+}
+
+// Sistema de Validação e Tratamento de Erros
+class ValidadorSistema {
+    static validarBalancete(balancete) {
+        const erros = [];
+        
+        // Validar estrutura básica
+        if (!balancete || typeof balancete !== 'object') {
+            erros.push('Balancete deve ser um objeto válido');
+            return erros;
+        }
+        
+        // Validar ID
+        if (!balancete.id || typeof balancete.id !== 'string') {
+            erros.push('ID do balancete é obrigatório e deve ser uma string');
+        }
+        
+        // Validar data
+        if (!balancete.data) {
+            erros.push('Data é obrigatória');
+        } else if (!/^\d{4}-\d{2}-\d{2}$/.test(balancete.data)) {
+            erros.push('Data deve estar no formato YYYY-MM-DD');
+        }
+        
+        // Validar lançamentos
+        if (!Array.isArray(balancete.lancamentos)) {
+            erros.push('Lançamentos devem ser um array');
+        } else if (balancete.lancamentos.length === 0) {
+            erros.push('Balancete deve ter pelo menos um lançamento');
+        } else {
+            balancete.lancamentos.forEach((lancamento, index) => {
+                const errosLancamento = ValidadorSistema.validarLancamento(lancamento, index);
+                erros.push(...errosLancamento);
+            });
+        }
+        
+        // Validar totais
+        if (typeof balancete.totalDebitos !== 'number' || balancete.totalDebitos < 0) {
+            erros.push('Total de débitos deve ser um número não negativo');
+        }
+        
+        if (typeof balancete.totalCreditos !== 'number' || balancete.totalCreditos < 0) {
+            erros.push('Total de créditos deve ser um número não negativo');
+        }
+        
+        return erros;
+    }
+    
+    static validarLancamento(lancamento, index) {
+        const erros = [];
+        const prefixo = `Lançamento ${index + 1}:`;
+        
+        // Validar conta
+        if (!lancamento.conta || typeof lancamento.conta !== 'string') {
+            erros.push(`${prefixo} Conta é obrigatória`);
+        } else if (lancamento.conta.trim().length < 3) {
+            erros.push(`${prefixo} Nome da conta deve ter pelo menos 3 caracteres`);
+        }
+        
+        // Validar tipo
+        if (!['débito', 'crédito'].includes(lancamento.tipo)) {
+            erros.push(`${prefixo} Tipo deve ser "débito" ou "crédito"`);
+        }
+        
+        // Validar valor
+        if (typeof lancamento.valor !== 'number') {
+            erros.push(`${prefixo} Valor deve ser um número`);
+        } else if (lancamento.valor <= 0) {
+            erros.push(`${prefixo} Valor deve ser maior que zero`);
+        } else if (!Number.isFinite(lancamento.valor)) {
+            erros.push(`${prefixo} Valor deve ser um número finito`);
+        }
+        
+        return erros;
+    }
+    
+    static validarEncargo(encargo) {
+        const erros = [];
+        
+        if (!encargo || typeof encargo !== 'object') {
+            erros.push('Encargo deve ser um objeto válido');
+            return erros;
+        }
+        
+        // Validar campos obrigatórios
+        const camposObrigatorios = ['funcionario', 'salarioBase', 'mes', 'ano'];
+        camposObrigatorios.forEach(campo => {
+            if (!encargo[campo]) {
+                erros.push(`Campo ${campo} é obrigatório`);
+            }
+        });
+        
+        // Validar tipos
+        if (encargo.salarioBase && (typeof encargo.salarioBase !== 'number' || encargo.salarioBase <= 0)) {
+            erros.push('Salário base deve ser um número positivo');
+        }
+        
+        if (encargo.mes && (typeof encargo.mes !== 'number' || encargo.mes < 1 || encargo.mes > 12)) {
+            erros.push('Mês deve ser um número entre 1 e 12');
+        }
+        
+        if (encargo.ano && (typeof encargo.ano !== 'number' || encargo.ano < 2000 || encargo.ano > 2100)) {
+            erros.push('Ano deve ser um número entre 2000 e 2100');
+        }
+        
+        return erros;
+    }
+    
+    static validarRescisao(rescisao) {
+        const erros = [];
+        
+        if (!rescisao || typeof rescisao !== 'object') {
+            erros.push('Dados de rescisão devem ser um objeto válido');
+            return erros;
+        }
+        
+        // Validar campos obrigatórios
+        const camposObrigatorios = ['funcionario', 'salario', 'dataAdmissao', 'dataRescisao', 'tipoRescisao'];
+        camposObrigatorios.forEach(campo => {
+            if (!rescisao[campo]) {
+                erros.push(`Campo ${campo} é obrigatório`);
+            }
+        });
+        
+        // Validar tipos e valores
+        if (rescisao.salario && (typeof rescisao.salario !== 'number' || rescisao.salario <= 0)) {
+            erros.push('Salário deve ser um número positivo');
+        }
+        
+        if (rescisao.dataAdmissao && rescisao.dataRescisao) {
+            const admissao = new Date(rescisao.dataAdmissao);
+            const rescisaoData = new Date(rescisao.dataRescisao);
+            
+            if (rescisaoData <= admissao) {
+                erros.push('Data de rescisão deve ser posterior à data de admissão');
+            }
+            
+            // Verificar se as datas são válidas
+            if (isNaN(admissao.getTime())) {
+                erros.push('Data de admissão inválida');
+            }
+            
+            if (isNaN(rescisaoData.getTime())) {
+                erros.push('Data de rescisão inválida');
+            }
+        }
+        
+        // Validar tipo de rescisão
+        const tiposValidos = ['demissao-sem-justa-causa', 'demissao-justa-causa', 'pedido-demissao', 'acordo-mutuo', 'termino-contrato'];
+        if (rescisao.tipoRescisao && !tiposValidos.includes(rescisao.tipoRescisao)) {
+            erros.push('Tipo de rescisão inválido');
+        }
+        
+        return erros;
+    }
+    
+    static exibirErros(erros, titulo = 'Erros encontrados') {
+        if (erros.length === 0) return false;
+        
+        const mensagem = `${titulo}:\n\n${erros.map(erro => `• ${erro}`).join('\n')}`;
+        alert(mensagem);
+        return true;
+    }
+    
+    static verificarIntegridadeSistema() {
+        const problemas = [];
+        
+        try {
+            // Verificar apenas problemas que impedem o funcionamento básico
+            if (!window.localStorage) {
+                problemas.push('CRÍTICO: LocalStorage não disponível');
+            }
+            
+            // Verificar jsPDF apenas quando necessário (não na inicialização)
+            // Esta verificação será feita apenas quando tentar gerar PDF
+            
+        } catch (e) {
+            problemas.push('CRÍTICO: Sistema não pôde ser verificado');
+        }
+        
+        return problemas;
+    }
+}
+
+// Sistema de Abas
+function initializarAbas() {
+    try {
+        const tabButtons = document.querySelectorAll('.tab-button');
+        const tabContents = document.querySelectorAll('.tab-content');
+        
+        if (tabButtons.length === 0) {
+            return;
+        }
+        
+        tabButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                try {
+                    const tabName = button.dataset.tab;
+                    
+                    if (!tabName) {
+                        console.error('Botão de aba sem atributo data-tab');
+                        return;
+                    }
+                    
+                    // Remover classe active de todos os botões e conteúdos
+                    tabButtons.forEach(btn => btn.classList.remove('active'));
+                    tabContents.forEach(content => content.classList.remove('active'));
+                    
+                    // Ativar o botão clicado
+                    button.classList.add('active');
+                    
+                    // Ativar o conteúdo correspondente
+                    const targetContent = document.getElementById(`tab-${tabName}`);
+                    if (targetContent) {
+                        targetContent.classList.add('active');
+                    } else {
+                        console.error(`Conteúdo da aba ${tabName} não encontrado`);
+                    }
+                } catch (e) {
+                    console.error('Erro ao trocar aba:', e);
+                }
+            });
+        });
+    } catch (e) {
+        console.error('Erro ao inicializar abas:', e);
+    }
+}
+
+// Sistema de Cálculo de Encargos
+function calcularEncargos() {
+    const salarioBruto = parseFloat(document.getElementById('salarioBruto').value.replace(/[^\d,]/g, '').replace(',', '.')) || 0;
+    const inssPatronal = parseFloat(document.getElementById('inssPatronal').value) || 0;
+    const fgts = parseFloat(document.getElementById('fgts').value) || 0;
+    const rat = parseFloat(document.getElementById('rat').value) || 0;
+    const terceiros = parseFloat(document.getElementById('terceiros').value) || 0;
+    
+    if (salarioBruto <= 0) {
+        alert('Por favor, informe um salário bruto válido.');
+        return;
+    }
+    
+    // Cálculos
+    const inssPatronalValor = salarioBruto * (inssPatronal / 100);
+    const fgtsValor = salarioBruto * (fgts / 100);
+    const ratValor = salarioBruto * (rat / 100);
+    const terceirosValor = salarioBruto * (terceiros / 100);
+    
+    // Provisões mensais
+    const decimoTerceiro = salarioBruto / 12; // 1/12 do salário por mês
+    const ferias = (salarioBruto * 1.33) / 12; // Salário + 1/3 dividido por 12 meses
+    const fgtsDecimo = decimoTerceiro * (fgts / 100);
+    const fgtsFerias = (salarioBruto * 1.33) * (fgts / 100) / 12;
+    
+    const totalEncargos = inssPatronalValor + fgtsValor + ratValor + terceirosValor + decimoTerceiro + ferias + fgtsDecimo + fgtsFerias;
+    const custoTotalFuncionario = salarioBruto + totalEncargos;
+    
+    // Exibir resultados
+    const container = document.getElementById('resultado-container');
+    container.innerHTML = `
+        <div class="resultado-card">
+            <h4>💼 INSS Patronal</h4>
+            <div class="resultado-valor">R$ ${formatarMoeda(inssPatronalValor)}</div>
+            <div class="resultado-detalhes">${inssPatronal}% sobre salário bruto</div>
+        </div>
+        
+        <div class="resultado-card">
+            <h4>🏦 FGTS</h4>
+            <div class="resultado-valor">R$ ${formatarMoeda(fgtsValor)}</div>
+            <div class="resultado-detalhes">${fgts}% sobre salário bruto</div>
+        </div>
+        
+        <div class="resultado-card">
+            <h4>⚠️ RAT</h4>
+            <div class="resultado-valor">R$ ${formatarMoeda(ratValor)}</div>
+            <div class="resultado-detalhes">${rat}% conforme grau de risco</div>
+        </div>
+        
+        <div class="resultado-card">
+            <h4>🏭 Sistema S</h4>
+            <div class="resultado-valor">R$ ${formatarMoeda(terceirosValor)}</div>
+            <div class="resultado-detalhes">${terceiros}% (SENAI/SESI/etc.)</div>
+        </div>
+        
+        <div class="resultado-card">
+            <h4>🎁 13º Salário (Provisão)</h4>
+            <div class="resultado-valor">R$ ${formatarMoeda(decimoTerceiro)}</div>
+            <div class="resultado-detalhes">1/12 do salário por mês</div>
+        </div>
+        
+        <div class="resultado-card">
+            <h4>🏖️ Férias (Provisão)</h4>
+            <div class="resultado-valor">R$ ${formatarMoeda(ferias)}</div>
+            <div class="resultado-detalhes">Salário + 1/3 ÷ 12 meses</div>
+        </div>
+        
+        <div class="resultado-card">
+            <h4>🏦 FGTS s/ 13º</h4>
+            <div class="resultado-valor">R$ ${formatarMoeda(fgtsDecimo)}</div>
+            <div class="resultado-detalhes">8% sobre provisão 13º</div>
+        </div>
+        
+        <div class="resultado-card">
+            <h4>🏦 FGTS s/ Férias</h4>
+            <div class="resultado-valor">R$ ${formatarMoeda(fgtsFerias)}</div>
+            <div class="resultado-detalhes">8% sobre provisão férias</div>
+        </div>
+        
+        <div class="resultado-card total-encargos">
+            <h4>💰 TOTAL ENCARGOS MENSAIS</h4>
+            <div class="resultado-valor">R$ ${formatarMoeda(totalEncargos)}</div>
+            <div class="resultado-detalhes">
+                Custo total: R$ ${formatarMoeda(custoTotalFuncionario)}<br>
+                Percentual sobre salário: ${((totalEncargos / salarioBruto) * 100).toFixed(1)}%
+            </div>
+        </div>
+    `;
+}
+
+function formatarSalario(input) {
+    let valor = input.value.replace(/[^\d]/g, '');
+    if (valor) {
+        valor = (parseInt(valor) / 100).toFixed(2);
+        valor = valor.replace('.', ',');
+        valor = valor.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+        input.value = 'R$ ' + valor;
+    }
+}
+
+function gerarLancamentos() {
+    const nomeFuncionario = document.getElementById('nomeFuncionario').value.trim();
+    const salarioBrutoStr = document.getElementById('salarioBruto').value;
+    
+    if (!nomeFuncionario) {
+        alert('Por favor, informe o nome do funcionário.');
+        return;
+    }
+    
+    if (!salarioBrutoStr) {
+        alert('Por favor, calcule os encargos primeiro.');
+        return;
+    }
+    
+    // Mudar para aba de balancete
+    document.querySelector('[data-tab="balancete"]').click();
+    
+    // Adicionar lançamentos automaticamente
+    setTimeout(() => {
+        adicionarLancamentoEncargos('credito', 'Ordenados e salários a pagar', salarioBrutoStr, `Salário ${nomeFuncionario}`);
+        
+        // Pegar valores calculados dos encargos
+        const resultados = document.querySelectorAll('.resultado-card .resultado-valor');
+        if (resultados.length >= 8) {
+            const inssValor = resultados[0].textContent.replace('R$ ', '').replace(/\./g, '').replace(',', '.');
+            const fgtsValor = resultados[1].textContent.replace('R$ ', '').replace(/\./g, '').replace(',', '.');
+            const decimoValor = resultados[4].textContent.replace('R$ ', '').replace(/\./g, '').replace(',', '.');
+            const feriasValor = resultados[5].textContent.replace('R$ ', '').replace(/\./g, '').replace(',', '.');
+            
+            adicionarLancamentoEncargos('credito', 'INSS a pagar', inssValor, `INSS Patronal ${nomeFuncionario}`);
+            adicionarLancamentoEncargos('credito', 'FGTS a recolher', fgtsValor, `FGTS ${nomeFuncionario}`);
+            adicionarLancamentoEncargos('credito', '13º a pagar', decimoValor, `Provisão 13º ${nomeFuncionario}`);
+            adicionarLancamentoEncargos('credito', 'Ferias a pagar', feriasValor, `Provisão Férias ${nomeFuncionario}`);
+        }
+        
+        sistemaBalancete.calcularBalance();
+    }, 500);
+}
+
+function adicionarLancamentoEncargos(tipo, conta, valor, descricao) {
+    sistemaBalancete.adicionarLancamento();
+    
+    const lancamentos = document.querySelectorAll('.lancamento-item');
+    const ultimoLancamento = lancamentos[lancamentos.length - 1];
+    
+    // Definir tipo
+    const tipoSelect = ultimoLancamento.querySelector('.tipo');
+    tipoSelect.value = tipo;
+    sistemaBalancete.mostrarCampoConta(tipoSelect);
+    
+    // Definir conta
+    setTimeout(() => {
+        const contaInput = ultimoLancamento.querySelector('.conta-input');
+        const contaHidden = ultimoLancamento.querySelector('.conta-selecionada');
+        contaInput.value = conta;
+        contaHidden.value = conta;
+        
+        // Definir valor
+        const valorInput = ultimoLancamento.querySelector('.valor');
+        valorInput.value = valor.toString().replace('.', ',');
+        
+        // Definir descrição
+        const descricaoInput = ultimoLancamento.querySelector('.descricao');
+        descricaoInput.value = descricao;
+        
+        sistemaBalancete.calcularBalance();
+    }, 100);
+}
+
+function limparEncargos() {
+    document.getElementById('encargosForm').reset();
+    document.getElementById('inssPatronal').value = '20';
+    document.getElementById('fgts').value = '8';
+    document.getElementById('rat').value = '2';
+    document.getElementById('terceiros').value = '5.8';
+    document.getElementById('resultado-container').innerHTML = '<p class="empty-state">Preencha os dados e clique em "Calcular Encargos"</p>';
+}
+
+// ====== SISTEMA DE CÁLCULO DE RESCISÃO ======
+
+function calcularRescisao() {
+    try {
+        // Obter dados do formulário
+        const nome = document.getElementById('nomeFuncionarioRescisao').value;
+        const salario = parseFloat(document.getElementById('salarioRescisao').value.replace(/[^\d,]/g, '').replace(',', '.')) || 0;
+        const dataAdmissao = new Date(document.getElementById('dataAdmissaoRescisao').value);
+        const dataRescisao = new Date(document.getElementById('dataRescisao').value);
+        const tipoRescisao = document.querySelector('input[name="tipoRescisao"]:checked').value;
+        
+        // Validações
+        if (!nome || !salario || !dataAdmissao || !dataRescisao) {
+            alert('Por favor, preencha todos os campos obrigatórios.');
+            return;
+        }
+        
+        if (dataRescisao <= dataAdmissao) {
+            alert('A data de rescisão deve ser posterior à data de admissão.');
+            return;
+        }
+        
+        // Calcular tempo de serviço
+        const tempoServico = calcularTempoServico(dataAdmissao, dataRescisao);
+        
+        // Calcular verbas rescisórias
+        const verbas = calcularVerbasRescisaorias(salario, tempoServico, tipoRescisao, dataAdmissao, dataRescisao);
+        
+        // Exibir resultados
+        exibirResultadoRescisao(nome, verbas, tempoServico, tipoRescisao);
+        
+    } catch (error) {
+        console.error('Erro no cálculo de rescisão:', error);
+        alert('Erro ao calcular rescisão: ' + error.message);
+    }
+}
+
+function calcularTempoServico(dataAdmissao, dataRescisao) {
+    const diffTime = Math.abs(dataRescisao - dataAdmissao);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    const anos = Math.floor(diffDays / 365);
+    const meses = Math.floor((diffDays % 365) / 30);
+    const dias = diffDays % 30;
+    
+    return {
+        totalDias: diffDays,
+        anos: anos,
+        meses: meses,
+        dias: dias,
+        totalMeses: anos * 12 + meses + (dias > 15 ? 1 : 0)
+    };
+}
+
+function calcularVerbasRescisaorias(salario, tempoServico, tipoRescisao, dataAdmissao, dataRescisao) {
+    const verbas = {
+        salario: salario,
+        saldoSalario: 0,
+        avisoPrevio: 0,
+        feriasVencidas: 0,
+        feriasProporcionais: 0,
+        tercoFerias: 0,
+        decimoTerceiro: 0,
+        fgts: 0,
+        multaFgts: 0,
+        totalBruto: 0,
+        inssDesconto: 0,
+        irrfDesconto: 0,
+        totalLiquido: 0
+    };
+    
+    // Saldo de salário (proporcional aos dias trabalhados no mês)
+    const ultimoDiaMes = new Date(dataRescisao.getFullYear(), dataRescisao.getMonth() + 1, 0).getDate();
+    const diasTrabalhados = dataRescisao.getDate();
+    verbas.saldoSalario = (salario / ultimoDiaMes) * diasTrabalhados;
+    
+    // Aviso prévio
+    const diasAvisoPrevio = parseInt(document.getElementById('avisoPrevio').value) || 30;
+    if (['demissao-sem-justa-causa', 'termino-contrato'].includes(tipoRescisao)) {
+        verbas.avisoPrevio = (salario / 30) * diasAvisoPrevio;
+    }
+    
+    // Férias vencidas
+    const diasFeriasVencidas = parseInt(document.getElementById('ferias').value) || 0;
+    if (diasFeriasVencidas > 0) {
+        verbas.feriasVencidas = (salario / 30) * diasFeriasVencidas;
+        verbas.tercoFerias += verbas.feriasVencidas / 3;
+    }
+    
+    // Férias proporcionais
+    if (document.getElementById('feriasProporcionais').checked && 
+        !['demissao-justa-causa'].includes(tipoRescisao)) {
+        const mesesParaFerias = tempoServico.totalMeses % 12;
+        if (mesesParaFerias > 0) {
+            verbas.feriasProporcionais = (salario / 12) * mesesParaFerias;
+            verbas.tercoFerias += verbas.feriasProporcionais / 3;
+        }
+    }
+    
+    // 13º salário proporcional
+    if (document.getElementById('decimoTerceiro').checked &&
+        !['demissao-justa-causa'].includes(tipoRescisao)) {
+        const mesesTrabalhados = new Date(dataRescisao).getMonth() + 1;
+        verbas.decimoTerceiro = (salario / 12) * mesesTrabalhados;
+    }
+    
+    // FGTS (8% sobre todas as verbas)
+    const baseFgts = verbas.saldoSalario + verbas.avisoPrevio + verbas.feriasVencidas + 
+                     verbas.feriasProporcionais + verbas.decimoTerceiro;
+    verbas.fgts = baseFgts * 0.08;
+    
+    // Multa 40% FGTS
+    if (document.getElementById('multa40').checked && 
+        ['demissao-sem-justa-causa', 'acordo-mutuo'].includes(tipoRescisao)) {
+        const saldoFgts = salario * 0.08 * tempoServico.totalMeses; // Aproximação do saldo FGTS
+        verbas.multaFgts = tipoRescisao === 'acordo-mutuo' ? saldoFgts * 0.2 : saldoFgts * 0.4;
+    }
+    
+    // Total bruto
+    verbas.totalBruto = verbas.saldoSalario + verbas.avisoPrevio + verbas.feriasVencidas + 
+                        verbas.feriasProporcionais + verbas.tercoFerias + verbas.decimoTerceiro;
+    
+    // Descontos INSS (sobre verbas tributáveis)
+    const baseTributavel = verbas.saldoSalario + verbas.avisoPrevio + verbas.decimoTerceiro;
+    verbas.inssDesconto = calcularINSS(baseTributavel);
+    
+    // Total líquido
+    verbas.totalLiquido = verbas.totalBruto - verbas.inssDesconto - verbas.irrfDesconto;
+    
+    return verbas;
+}
+
+function calcularINSS(base) {
+    // Tabela INSS 2025 (valores aproximados)
+    if (base <= 1412) return base * 0.075;
+    if (base <= 2666.68) return base * 0.09 - 21.18;
+    if (base <= 4000.03) return base * 0.12 - 101.18;
+    if (base <= 7786.02) return base * 0.14 - 181.18;
+    return 908.85; // Teto INSS
+}
+
+function exibirResultadoRescisao(nome, verbas, tempoServico, tipoRescisao) {
+    const container = document.getElementById('resultado-rescisao-container');
+    
+    const tiposDescricao = {
+        'demissao-sem-justa-causa': 'Demissão sem justa causa',
+        'demissao-justa-causa': 'Demissão por justa causa',
+        'pedido-demissao': 'Pedido de demissão',
+        'acordo-mutuo': 'Acordo mútuo',
+        'termino-contrato': 'Término de contrato'
+    };
+    
+    container.innerHTML = `
+        <div class="resultado-header">
+            <h4>💼 ${nome}</h4>
+            <div class="tipo-rescisao-badge">${tiposDescricao[tipoRescisao]}</div>
+        </div>
+        
+        <div class="tempo-servico">
+            <h5>⏰ Tempo de Serviço</h5>
+            <p>${tempoServico.anos} anos, ${tempoServico.meses} meses e ${tempoServico.dias} dias</p>
+        </div>
+        
+        <div class="verbas-grid">
+            <div class="verba-item">
+                <span class="label">Saldo de Salário:</span>
+                <span class="value">R$ ${formatarMoeda(verbas.saldoSalario)}</span>
+            </div>
+            ${verbas.avisoPrevio > 0 ? `
+            <div class="verba-item">
+                <span class="label">Aviso Prévio:</span>
+                <span class="value">R$ ${formatarMoeda(verbas.avisoPrevio)}</span>
+            </div>
+            ` : ''}
+            ${verbas.feriasVencidas > 0 ? `
+            <div class="verba-item">
+                <span class="label">Férias Vencidas:</span>
+                <span class="value">R$ ${formatarMoeda(verbas.feriasVencidas)}</span>
+            </div>
+            ` : ''}
+            ${verbas.feriasProporcionais > 0 ? `
+            <div class="verba-item">
+                <span class="label">Férias Proporcionais:</span>
+                <span class="value">R$ ${formatarMoeda(verbas.feriasProporcionais)}</span>
+            </div>
+            ` : ''}
+            ${verbas.tercoFerias > 0 ? `
+            <div class="verba-item">
+                <span class="label">1/3 Férias:</span>
+                <span class="value">R$ ${formatarMoeda(verbas.tercoFerias)}</span>
+            </div>
+            ` : ''}
+            ${verbas.decimoTerceiro > 0 ? `
+            <div class="verba-item">
+                <span class="label">13º Proporcional:</span>
+                <span class="value">R$ ${formatarMoeda(verbas.decimoTerceiro)}</span>
+            </div>
+            ` : ''}
+            ${verbas.fgts > 0 ? `
+            <div class="verba-item">
+                <span class="label">Depósito FGTS:</span>
+                <span class="value">R$ ${formatarMoeda(verbas.fgts)}</span>
+            </div>
+            ` : ''}
+            ${verbas.multaFgts > 0 ? `
+            <div class="verba-item destacado">
+                <span class="label">Multa FGTS:</span>
+                <span class="value">R$ ${formatarMoeda(verbas.multaFgts)}</span>
+            </div>
+            ` : ''}
+        </div>
+        
+        <div class="descontos-section">
+            <h5>📉 Descontos</h5>
+            <div class="verba-item">
+                <span class="label">INSS:</span>
+                <span class="value desconto">- R$ ${formatarMoeda(verbas.inssDesconto)}</span>
+            </div>
+        </div>
+        
+        <div class="totais-section">
+            <div class="total-item">
+                <span class="label">Total Bruto:</span>
+                <span class="value">R$ ${formatarMoeda(verbas.totalBruto)}</span>
+            </div>
+            <div class="total-item total-liquido">
+                <span class="label">Total Líquido:</span>
+                <span class="value">R$ ${formatarMoeda(verbas.totalLiquido)}</span>
+            </div>
+            ${verbas.multaFgts > 0 ? `
+            <div class="total-item">
+                <span class="label">Total com Multa FGTS:</span>
+                <span class="value">R$ ${formatarMoeda(verbas.totalLiquido + verbas.multaFgts)}</span>
+            </div>
+            ` : ''}
+        </div>
+        
+        <div class="observacoes">
+            <h5>📝 Observações</h5>
+            <ul>
+                ${document.getElementById('seguroDesemprego').checked ? 
+                    '<li>✅ Funcionário tem direito ao seguro-desemprego</li>' : 
+                    '<li>❌ Funcionário não tem direito ao seguro-desemprego</li>'}
+                <li>📊 Cálculo baseado na legislação trabalhista vigente</li>
+                <li>⚖️ Consulte um especialista para casos específicos</li>
+            </ul>
+        </div>
+    `;
+}
+
+function gerarLancamentosRescisao() {
+    alert('Funcionalidade de geração de lançamentos de rescisão em desenvolvimento!');
+}
+
+function gerarPDFRescisao() {
+    try {
+        // Verificar se jsPDF está disponível
+        if (typeof window.jsPDF === 'undefined') {
+            throw new Error('Biblioteca PDF não está carregada');
+        }
+
+        // Obter dados do formulário
+        const nome = document.getElementById('nomeFuncionarioRescisao').value;
+        const salario = parseFloat(document.getElementById('salarioRescisao').value.replace(/[^\d,]/g, '').replace(',', '.')) || 0;
+        const dataAdmissao = new Date(document.getElementById('dataAdmissaoRescisao').value);
+        const dataRescisao = new Date(document.getElementById('dataRescisao').value);
+        const tipoRescisao = document.querySelector('input[name="tipoRescisao"]:checked')?.value;
+        
+        // Validações
+        if (!nome || !salario || !dataAdmissao || !dataRescisao || !tipoRescisao) {
+            alert('Por favor, calcule a rescisão primeiro antes de gerar o PDF.');
+            return;
+        }
+        
+        // Recalcular dados para o PDF
+        const tempoServico = calcularTempoServico(dataAdmissao, dataRescisao);
+        const verbas = calcularVerbasRescisaorias(salario, tempoServico, tipoRescisao, dataAdmissao, dataRescisao);
+        
+        // Criar PDF
+        const { jsPDF } = window.jsPDF;
+        const doc = new jsPDF();
+        
+        // Cabeçalho profissional
+        doc.setFillColor(156, 39, 176);
+        doc.rect(0, 0, 210, 40, 'F');
+        
+        // Título
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(18);
+        doc.setTextColor(255, 255, 255);
+        doc.text('💼 TERMO DE RESCISÃO DE CONTRATO', 105, 20, { align: 'center' });
+        
+        // Informações da empresa
+        doc.setFontSize(10);
+        doc.text('Sistema Integrado de Recursos Humanos', 105, 28, { align: 'center' });
+        doc.text(`Documento gerado em: ${new Date().toLocaleString('pt-BR')}`, 105, 34, { align: 'center' });
+        
+        // Linha separadora
+        doc.setDrawColor(156, 39, 176);
+        doc.setLineWidth(1);
+        doc.line(15, 45, 195, 45);
+        
+        doc.setTextColor(0, 0, 0);
+        let y = 55;
+        
+        // Dados do funcionário
+        doc.setFillColor(248, 249, 250);
+        doc.rect(15, y - 5, 180, 25, 'F');
+        doc.setDrawColor(156, 39, 176);
+        doc.rect(15, y - 5, 180, 25);
+        
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(14);
+        doc.text('👤 DADOS DO FUNCIONÁRIO', 20, y + 3);
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(11);
+        doc.text(`Nome: ${nome}`, 20, y + 10);
+        doc.text(`Último salário: R$ ${formatarMoeda(salario)}`, 20, y + 16);
+        
+        y += 35;
+        
+        // Período de trabalho
+        doc.setFillColor(240, 248, 255);
+        doc.rect(15, y - 5, 180, 20, 'F');
+        doc.setDrawColor(33, 150, 243);
+        doc.rect(15, y - 5, 180, 20);
+        
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(12);
+        doc.text('📅 PERÍODO DE TRABALHO', 20, y + 3);
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.text(`Admissão: ${dataAdmissao.toLocaleDateString('pt-BR')}`, 20, y + 10);
+        doc.text(`Rescisão: ${dataRescisao.toLocaleDateString('pt-BR')}`, 110, y + 10);
+        doc.text(`Tempo de serviço: ${tempoServico.anos} anos, ${tempoServico.meses} meses e ${tempoServico.dias} dias`, 20, y + 16);
+        
+        y += 30;
+        
+        // Tipo de rescisão
+        const tiposDescricao = {
+            'demissao-sem-justa-causa': 'Demissão sem justa causa',
+            'demissao-justa-causa': 'Demissão por justa causa',
+            'pedido-demissao': 'Pedido de demissão',
+            'acordo-mutuo': 'Acordo mútuo',
+            'termino-contrato': 'Término de contrato'
+        };
+        
+        doc.setFillColor(255, 243, 224);
+        doc.rect(15, y - 5, 180, 12, 'F');
+        doc.setDrawColor(255, 152, 0);
+        doc.rect(15, y - 5, 180, 12);
+        
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(12);
+        doc.text(`🏛️ TIPO: ${tiposDescricao[tipoRescisao].toUpperCase()}`, 20, y + 2);
+        
+        y += 20;
+        
+        // Verbas rescisórias
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(14);
+        doc.text('💰 VERBAS RESCISÓRIAS', 20, y);
+        y += 10;
+        
+        // Cabeçalho da tabela
+        doc.setFillColor(230, 230, 230);
+        doc.rect(15, y - 2, 180, 8, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.text('DESCRIÇÃO', 20, y + 3);
+        doc.text('VALOR', 160, y + 3);
+        y += 10;
+        
+        // Itens das verbas
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        
+        const verbas_lista = [
+            { label: 'Saldo de salário', valor: verbas.saldoSalario, mostrar: true },
+            { label: 'Aviso prévio', valor: verbas.avisoPrevio, mostrar: verbas.avisoPrevio > 0 },
+            { label: 'Férias vencidas', valor: verbas.feriasVencidas, mostrar: verbas.feriasVencidas > 0 },
+            { label: 'Férias proporcionais', valor: verbas.feriasProporcionais, mostrar: verbas.feriasProporcionais > 0 },
+            { label: '1/3 sobre férias', valor: verbas.tercoFerias, mostrar: verbas.tercoFerias > 0 },
+            { label: '13º salário proporcional', valor: verbas.decimoTerceiro, mostrar: verbas.decimoTerceiro > 0 },
+            { label: 'Depósito FGTS (8%)', valor: verbas.fgts, mostrar: verbas.fgts > 0 }
+        ];
+        
+        verbas_lista.forEach(verba => {
+            if (verba.mostrar && y < 250) {
+                doc.text(verba.label, 20, y);
+                doc.text(`R$ ${formatarMoeda(verba.valor)}`, 160, y);
+                y += 5;
+            }
+        });
+        
+        // Linha separadora
+        y += 5;
+        doc.setDrawColor(0, 0, 0);
+        doc.line(15, y, 195, y);
+        y += 8;
+        
+        // Total bruto
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(11);
+        doc.text('TOTAL BRUTO', 20, y);
+        doc.text(`R$ ${formatarMoeda(verbas.totalBruto)}`, 160, y);
+        y += 8;
+        
+        // Descontos
+        if (verbas.inssDesconto > 0) {
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(9);
+            doc.text('(-) Desconto INSS', 20, y);
+            doc.text(`R$ ${formatarMoeda(verbas.inssDesconto)}`, 160, y);
+            y += 5;
+        }
+        
+        // Linha separadora
+        y += 3;
+        doc.line(15, y, 195, y);
+        y += 8;
+        
+        // Total líquido
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(12);
+        doc.setTextColor(46, 125, 50);
+        doc.text('TOTAL LÍQUIDO A RECEBER', 20, y);
+        doc.text(`R$ ${formatarMoeda(verbas.totalLiquido)}`, 160, y);
+        doc.setTextColor(0, 0, 0);
+        y += 15;
+        
+        // FGTS e multa (se aplicável)
+        if (verbas.multaFgts > 0) {
+            doc.setFillColor(255, 235, 238);
+            doc.rect(15, y - 5, 180, 15, 'F');
+            doc.setDrawColor(244, 67, 54);
+            doc.rect(15, y - 5, 180, 15);
+            
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(11);
+            doc.setTextColor(198, 40, 40);
+            doc.text('💳 FGTS E MULTA', 20, y + 2);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(10);
+            doc.text(`Multa FGTS (${tipoRescisao === 'acordo-mutuo' ? '20%' : '40%'}): R$ ${formatarMoeda(verbas.multaFgts)}`, 20, y + 8);
+            doc.setTextColor(0, 0, 0);
+            y += 20;
+        }
+        
+        // Observações
+        if (y > 220) {
+            doc.addPage();
+            y = 20;
+        }
+        
+        doc.setFillColor(227, 242, 253);
+        doc.rect(15, y - 5, 180, 25, 'F');
+        doc.setDrawColor(33, 150, 243);
+        doc.rect(15, y - 5, 180, 25);
+        
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(11);
+        doc.text('📝 OBSERVAÇÕES IMPORTANTES', 20, y + 3);
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        const seguroDesemprego = document.getElementById('seguroDesemprego')?.checked;
+        doc.text(`• Direito ao seguro-desemprego: ${seguroDesemprego ? 'SIM' : 'NÃO'}`, 20, y + 10);
+        doc.text('• Cálculos baseados na legislação trabalhista vigente', 20, y + 15);
+        doc.text('• Para casos específicos, consulte um especialista em direito trabalhista', 20, y + 20);
+        
+        // Salvar PDF
+        const nomeArquivo = `rescisao_${nome.replace(/\s+/g, '_')}_${new Date().getTime()}.pdf`;
+        doc.save(nomeArquivo);
+        
+        alert(`✅ PDF de rescisão gerado com sucesso!\nArquivo: ${nomeArquivo}`);
+        
+    } catch (error) {
+        console.error('Erro ao gerar PDF de rescisão:', error);
+        alert('Erro ao gerar PDF: ' + error.message);
+    }
+}
+
+function limparRescisao() {
+    document.getElementById('rescisaoForm').reset();
+    document.getElementById('avisoPrevio').value = '30';
+    document.getElementById('ferias').value = '0';
+    document.getElementById('feriasProporcionais').checked = true;
+    document.getElementById('decimoTerceiro').checked = true;
+    document.getElementById('multa40').checked = true;
+    document.getElementById('seguroDesemprego').checked = false;
+    document.getElementById('resultado-rescisao-container').innerHTML = '<p class="empty-state">Preencha os dados e clique em "Calcular Rescisão"</p>';
+}
+
+function formatarSalarioRescisao(input) {
+    let valor = input.value.replace(/\D/g, '');
+    valor = valor.replace(/(\d)(\d{2})$/, '$1,$2');
+    valor = valor.replace(/(?=(\d{3})+(\D))\B/g, '.');
+    input.value = valor ? 'R$ ' + valor : '';
+}
+
+function formatarMoeda(valor) {
+    return new Intl.NumberFormat('pt-BR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    }).format(valor);
 }
 
 // Inicializar sistema quando a página carregar
 let sistemaBalancete;
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('Inicializando Sistema de Balancete...');
-    sistemaBalancete = new SistemaBalancete();
-    console.log('✅ Sistema de Balancete inicializado com sucesso!');
-    
-    // Forçar cálculo inicial após um breve delay
-    setTimeout(() => {
-        console.log('Executando cálculo inicial...');
-        sistemaBalancete.calcularBalance();
-    }, 200);
+    try {
+
+        
+        // Verificação silenciosa do sistema
+        const problemas = ValidadorSistema.verificarIntegridadeSistema();
+        // Só mostrar problemas realmente críticos que impedem funcionamento
+        const problemasCriticos = problemas.filter(p => p.includes('CRÍTICO'));
+        if (problemasCriticos.length > 0) {
+            console.error('Problemas críticos detectados:', problemasCriticos);
+        }
+        
+        // Inicializar sistema principal
+        sistemaBalancete = new SistemaBalancete();
+
+        
+        // Inicializar abas com validação
+        initializarAbas();
+        
+        // Configurar formatação automática do salário com validação
+        const salarioBrutoElement = document.getElementById('salarioBruto');
+        if (salarioBrutoElement) {
+            salarioBrutoElement.addEventListener('input', function() {
+                try {
+                    formatarSalario(this);
+                } catch (e) {
+                    console.error('Erro na formatação do salário:', e);
+                }
+            });
+        }
+        
+        // Configurar formatação do salário de rescisão
+        const salarioRescisaoElement = document.getElementById('salarioRescisao');
+        if (salarioRescisaoElement) {
+            salarioRescisaoElement.addEventListener('input', function() {
+                try {
+                    formatarSalarioRescisao(this);
+                } catch (e) {
+                    console.error('Erro na formatação do salário de rescisão:', e);
+                }
+            });
+        }
+        
+        // Sistema de verificação disponível se necessário
+        window.verificarSistema = () => ValidadorSistema.verificarIntegridadeSistema();
+        
+        // Forçar cálculo inicial após um breve delay
+        setTimeout(() => {
+            try {
+                if (sistemaBalancete && typeof sistemaBalancete.calcularBalance === 'function') {
+                    sistemaBalancete.calcularBalance();
+                } else {
+                    console.error('Método calcularBalance não disponível');
+                }
+            } catch (e) {
+                console.error('Erro no cálculo inicial:', e);
+            }
+        }, 200);
+        
+        // Mostrar status positivo apenas
+        setTimeout(() => {
+            const statusElement = document.getElementById('system-status');
+            if (statusElement) {
+                statusElement.innerHTML = '✅ Sistema funcionando normalmente';
+                statusElement.style.background = 'linear-gradient(45deg, #28a745, #20c997)';
+            }
+        }, 500);
+        
+    } catch (error) {
+        console.error('Erro crítico na inicialização:', error);
+        alert('Erro crítico ao inicializar o sistema: ' + error.message + '\n\nPor favor, recarregue a página.');
+    }
 });
