@@ -90,15 +90,40 @@ main {
 }
 
 .lancamento-item {
-    display: grid;
-    grid-template-columns: 120px 1fr 120px auto;
-    gap: 10px;
-    margin-bottom: 10px;
+    margin-bottom: 15px;
     padding: 15px;
     background: white;
-    border-radius: 5px;
-    border: 1px solid #ddd;
-    align-items: start;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e0e6ed;
+}
+
+.lancamento-main {
+    display: grid;
+    grid-template-columns: 120px 1fr 150px 50px;
+    gap: 10px;
+    align-items: center;
+}
+
+.descricao-separator {
+    margin: 12px 0 8px 0;
+    border: none;
+    border-top: 1px solid #e0e6ed;
+    opacity: 0.6;
+}
+
+.descricao-container {
+    margin-top: 8px;
+}
+
+.descricao-container .descricao {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #d1d9e0;
+    border-radius: 6px;
+    font-size: 14px;
+    color: #666;
+    background-color: #f8f9fa;
 }
 
 .lancamento-item input,
@@ -369,6 +394,101 @@ main {
     border-radius: 8px;
 }
 
+/* Grupos de Data */
+.grupo-data {
+    margin-bottom: 20px;
+    background: #f8f9fa;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.grupo-header {
+    background: linear-gradient(135deg, #3498db, #2980b9);
+    color: white;
+    padding: 15px 20px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all 0.3s ease;
+    user-select: none;
+}
+
+.grupo-header:hover {
+    background: linear-gradient(135deg, #2980b9, #1f4e79);
+    transform: translateY(-1px);
+}
+
+.grupo-header.data-hoje {
+    background: linear-gradient(135deg, #e74c3c, #c0392b);
+    animation: pulse-hoje 2s infinite;
+}
+
+.grupo-header.data-hoje:hover {
+    background: linear-gradient(135deg, #c0392b, #a93226);
+}
+
+@keyframes pulse-hoje {
+    0% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.4); }
+    70% { box-shadow: 0 0 0 8px rgba(231, 76, 60, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); }
+}
+
+.grupo-titulo {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.grupo-data-text {
+    font-size: 16px;
+    font-weight: 600;
+    text-transform: capitalize;
+}
+
+.grupo-contador {
+    font-size: 12px;
+    opacity: 0.9;
+    font-weight: 400;
+}
+
+.grupo-resumo {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    font-size: 12px;
+}
+
+.grupo-total {
+    background: rgba(255, 255, 255, 0.2);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-weight: 500;
+}
+
+.grupo-seta {
+    font-size: 14px;
+    transition: transform 0.3s ease;
+    margin-left: 8px;
+}
+
+.grupo-conteudo {
+    padding: 15px;
+    background: #f8f9fa;
+}
+
+.grupo-conteudo .balancete-card {
+    margin-bottom: 15px;
+    background: white;
+    border: 1px solid #e1e8ed;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+.grupo-conteudo .balancete-card:last-child {
+    margin-bottom: 0;
+}
+
 .balancete-card {
     background: white;
     border: 1px solid #e1e8ed;
@@ -513,6 +633,28 @@ main {
     
     .stats {
         flex-direction: column;
+    }
+    
+    .grupo-header {
+        padding: 12px 15px;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+    
+    .grupo-resumo {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+        font-size: 11px;
+    }
+    
+    .grupo-data-text {
+        font-size: 14px;
+    }
+    
+    .grupo-conteudo {
+        padding: 10px;
         gap: 10px;
         text-align: center;
     }
@@ -585,4 +727,169 @@ main {
     color: #2c3e50;
     margin-bottom: 20px;
     font-size: 1.4rem;
+}
+
+/* Estilos do Popup de Relatórios */
+.popup-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+}
+
+.popup-content {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    width: 90%;
+    max-width: 500px;
+    max-height: 90%;
+    overflow: auto;
+}
+
+.popup-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    border-bottom: 1px solid #eee;
+    background: #f8f9fa;
+    border-radius: 8px 8px 0 0;
+}
+
+.popup-header h3 {
+    margin: 0;
+    color: #2c3e50;
+    font-size: 1.2rem;
+}
+
+.btn-fechar {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #666;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: background-color 0.3s ease;
+}
+
+.btn-fechar:hover {
+    background: #e9ecef;
+    color: #000;
+}
+
+.popup-body {
+    padding: 20px;
+}
+
+.filtros-relatorio {
+    margin-bottom: 20px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.filtro-grupo {
+    margin-bottom: 15px;
+}
+
+.filtro-grupo label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 600;
+    color: #2c3e50;
+    font-size: 14px;
+}
+
+.filtro-grupo select,
+.filtro-grupo input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #d1d9e0;
+    border-radius: 6px;
+    font-size: 14px;
+    background: white;
+}
+
+.filtro-grupo select:focus,
+.filtro-grupo input:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+}
+
+.opcoes-relatorio {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.opcao-btn {
+    background: white;
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    padding: 20px;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 16px;
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.opcao-btn:hover {
+    border-color: #3498db;
+    background: #f8f9fa;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(52, 152, 219, 0.2);
+}
+
+.opcao-btn small {
+    display: block;
+    font-weight: normal;
+    color: #666;
+    margin-top: 5px;
+    font-size: 14px;
+}
+
+.gerar-relatorio-btn, .exportar-todos-btn {
+    background: #3498db;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.3s ease;
+}
+
+.gerar-relatorio-btn:hover, .exportar-todos-btn:hover {
+    background: #2980b9;
+}
+
+.exportar-pdf-btn {
+    background: #27ae60;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background-color 0.3s ease;
+}
+
+.exportar-pdf-btn:hover {
+    background: #219a52;
 }

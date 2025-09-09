@@ -262,6 +262,7 @@ class SistemaBalancete {
         // Eventos para cálculo automático usando delegação de eventos
         document.addEventListener('input', (e) => {
             if (e.target.classList.contains('valor')) {
+                this.formatarValorInput(e.target);
                 console.log('Valor alterado:', e.target.value);
                 this.calcularBalance();
             }
@@ -303,17 +304,24 @@ class SistemaBalancete {
         const lancamentoItem = tipoSelect.closest('.lancamento-item');
         const contaSelector = lancamentoItem.querySelector('.conta-selector');
         const contaInput = lancamentoItem.querySelector('.conta-input');
-        
+        const contaHidden = lancamentoItem.querySelector('.conta-selecionada');
+
         const tipo = tipoSelect.value;
-        
+
         if (tipo) {
             contaSelector.style.display = 'block';
-            contaInput.focus();
             contaInput.value = '';
             contaInput.setAttribute('data-tipo', tipo);
-            this.limparContaSelecionada(lancamentoItem);
+            contaInput.disabled = false;
+            contaInput.placeholder = 'Digite para buscar conta...';
+            contaInput.focus();
+            if (contaHidden) contaHidden.value = '';
+            this.fecharSugestoes(lancamentoItem);
         } else {
             contaSelector.style.display = 'none';
+            contaInput.value = '';
+            contaInput.disabled = true;
+            if (contaHidden) contaHidden.value = '';
             this.fecharSugestoes(lancamentoItem);
         }
     }
@@ -532,6 +540,40 @@ class SistemaBalancete {
         document.getElementById('data').value = hoje;
     }
 
+    // Formatação de valores monetários no input
+    formatarValorInput(input) {
+        let valor = input.value;
+        
+        // Remove tudo que não é número, vírgula ou ponto
+        valor = valor.replace(/[^\d,.]/g, '');
+        
+        // Substitui vírgula por ponto para cálculos
+        if (valor.includes(',')) {
+            // Se tem vírgula, assume formato brasileiro (123,45)
+            valor = valor.replace(/\./g, '').replace(',', '.');
+        }
+        
+        // Limita a 2 casas decimais
+        const partes = valor.split('.');
+        if (partes.length > 2) {
+            valor = partes[0] + '.' + partes[1];
+        }
+        if (partes[1] && partes[1].length > 2) {
+            valor = partes[0] + '.' + partes[1].substring(0, 2);
+        }
+        
+        // Atualiza o input apenas se o valor mudou
+        if (input.value !== valor) {
+            const cursorPos = input.selectionStart;
+            input.value = valor;
+            
+            // Mantém a posição do cursor
+            setTimeout(() => {
+                input.setSelectionRange(cursorPos, cursorPos);
+            }, 0);
+        }
+    }
+
     // Gerenciamento de lançamentos
     adicionarLancamento() {
         const container = document.getElementById('lancamentos-container');
@@ -544,20 +586,26 @@ class SistemaBalancete {
         const div = document.createElement('div');
         div.className = 'lancamento-item';
         div.innerHTML = `
-            <select class="tipo" required>
-                <option value="">Tipo</option>
-                <option value="debito">Débito</option>
-                <option value="credito">Crédito</option>
-            </select>
-            <div class="conta-selector" style="display: none;">
-                <input type="text" class="conta-input" placeholder="Digite para buscar conta..." autocomplete="off">
-                <div class="sugestoes-container" style="display: none;">
-                    <div class="sugestoes-lista"></div>
+            <div class="lancamento-main">
+                <select class="tipo" required>
+                    <option value="">Tipo</option>
+                    <option value="debito">Débito</option>
+                    <option value="credito">Crédito</option>
+                </select>
+                <div class="conta-selector" style="display: none;">
+                    <input type="text" class="conta-input" placeholder="Digite para buscar conta..." autocomplete="off">
+                    <div class="sugestoes-container" style="display: none;">
+                        <div class="sugestoes-lista"></div>
+                    </div>
+                    <input type="hidden" class="conta-selecionada">
                 </div>
-                <input type="hidden" class="conta-selecionada">
+                <input type="text" placeholder="Valor (ex: 1500,50)" class="valor" required>
+                <button type="button" class="remove-lancamento" onclick="sistemaBalancete.removerLancamento(this)">❌</button>
             </div>
-            <input type="number" placeholder="Valor" class="valor" step="0.01" min="0" required>
-            <button type="button" class="remove-lancamento" onclick="sistemaBalancete.removerLancamento(this)">❌</button>
+            <hr class="descricao-separator">
+            <div class="descricao-container">
+                <input type="text" placeholder="Descrição do lançamento (opcional)" class="descricao">
+            </div>
         `;
         return div;
     }
@@ -638,18 +686,21 @@ class SistemaBalancete {
             const tipoElement = item.querySelector('.tipo');
             const contaElement = item.querySelector('.conta-selecionada');
             const valorElement = item.querySelector('.valor');
+            const descricaoElement = item.querySelector('.descricao');
 
             const tipo = tipoElement ? tipoElement.value : '';
             const conta = contaElement ? contaElement.value : '';
             const valor = valorElement ? valorElement.value : '';
+            const descricao = descricaoElement ? descricaoElement.value.trim() : '';
 
-            console.log(`Lançamento ${index + 1}:`, { tipo, conta, valor });
+            console.log(`Lançamento ${index + 1}:`, { tipo, conta, valor, descricao });
 
             if (tipo && valor && parseFloat(valor) > 0) {
                 lancamentos.push({ 
                     tipo, 
                     conta: conta || 'Conta não selecionada', 
-                    valor: parseFloat(valor) 
+                    valor: parseFloat(valor),
+                    descricao: descricao || ''
                 });
             }
         });
@@ -734,9 +785,68 @@ class SistemaBalancete {
             return;
         }
 
-        container.innerHTML = this.balancetes.map(balancete => 
-            this.criarCardBalancete(balancete)
+        // Agrupar balancetes por data
+        const balancetesPorData = {};
+        this.balancetes.forEach(balancete => {
+            const data = balancete.data;
+            if (!balancetesPorData[data]) {
+                balancetesPorData[data] = [];
+            }
+            balancetesPorData[data].push(balancete);
+        });
+
+        // Ordenar datas (mais recentes primeiro)
+        const datasOrdenadas = Object.keys(balancetesPorData).sort((a, b) => b.localeCompare(a));
+
+        container.innerHTML = datasOrdenadas.map((data, index) => 
+            this.criarGrupoData(data, balancetesPorData[data], index === 0)
         ).join('');
+    }
+
+    criarGrupoData(data, balancetes, expandir = false) {
+        const dataFormatada = new Date(data + 'T00:00:00').toLocaleDateString('pt-BR', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+        
+        const totalBalancetes = balancetes.length;
+        let totalDebitos = 0, totalCreditos = 0;
+        
+        balancetes.forEach(b => {
+            totalDebitos += b.totalDebitos;
+            totalCreditos += b.totalCreditos;
+        });
+
+        const grupoId = `grupo-${data}`;
+        const balancetesHtml = balancetes.map(balancete => this.criarCardBalancete(balancete)).join('');
+        const displayStyle = expandir ? 'block' : 'none';
+        const setaTexto = expandir ? '▲' : '▼';
+
+        return `
+            <div class="grupo-data">
+                <div class="grupo-header ${this.isDataHoje(data) ? 'data-hoje' : ''}" onclick="toggleGrupoData('${grupoId}')">
+                    <div class="grupo-titulo">
+                        <span class="grupo-data-text">📅 ${dataFormatada} ${this.isDataHoje(data) ? '🔥' : ''}</span>
+                        <span class="grupo-contador">${totalBalancetes} balancete${totalBalancetes > 1 ? 's' : ''}</span>
+                    </div>
+                    <div class="grupo-resumo">
+                        <span class="grupo-total">Débitos: R$ ${this.formatarMoeda(totalDebitos)}</span>
+                        <span class="grupo-total">Créditos: R$ ${this.formatarMoeda(totalCreditos)}</span>
+                        <span class="grupo-seta">${setaTexto}</span>
+                    </div>
+                </div>
+                <div id="${grupoId}" class="grupo-conteudo" style="display: ${displayStyle};">
+                    ${balancetesHtml}
+                </div>
+            </div>
+        `;
+    }
+
+    isDataHoje(data) {
+        const hoje = new Date().toISOString().split('T')[0];
+        return data === hoje;
     }
 
     criarCardBalancete(balancete) {
@@ -747,6 +857,7 @@ class SistemaBalancete {
                 <div class="lancamento-info">
                     <div class="lancamento-descricao">${lancamento.conta}</div>
                     <div class="lancamento-tipo">${lancamento.tipo}</div>
+                    ${lancamento.descricao ? `<div class="lancamento-obs">${lancamento.descricao}</div>` : ''}
                 </div>
                 <div class="lancamento-valor ${lancamento.tipo}">
                     R$ ${this.formatarMoeda(lancamento.valor)}
@@ -805,7 +916,8 @@ class SistemaBalancete {
                     </div>
                     <input type="hidden" class="conta-selecionada">
                 </div>
-                <input type="number" placeholder="Valor" class="valor" step="0.01" min="0" required>
+                <input type="text" placeholder="Valor (ex: 1500,50)" class="valor" required>
+                <input type="text" placeholder="Descrição do lançamento" class="descricao">
                 <button type="button" class="remove-lancamento" onclick="sistemaBalancete.removerLancamento(this)">❌</button>
             </div>
         `;
@@ -905,6 +1017,253 @@ function limparFormulario() {
 
 function limparCache() {
     sistemaBalancete.limparCache();
+}
+
+// Função para expandir/contrair grupos de data
+function toggleGrupoData(grupoId) {
+    const conteudo = document.getElementById(grupoId);
+    const seta = conteudo.previousElementSibling.querySelector('.grupo-seta');
+    
+    if (conteudo.style.display === 'none') {
+        conteudo.style.display = 'block';
+        seta.textContent = '▲';
+        seta.style.transform = 'rotate(180deg)';
+    } else {
+        conteudo.style.display = 'none';
+        seta.textContent = '▼';
+        seta.style.transform = 'rotate(0deg)';
+    }
+}
+
+// Funções do Popup de Relatórios
+function abrirPopupRelatorios() {
+    document.getElementById('popupRelatorios').style.display = 'flex';
+    
+    // Definir data de hoje como padrão
+    const hoje = new Date().toISOString().split('T')[0];
+    document.getElementById('dataEspecifica').value = hoje;
+    
+    // Definir mês atual como padrão
+    const mesAtual = hoje.substring(0, 7); // YYYY-MM
+    const selectMes = document.getElementById('mesRelatorio');
+    if (selectMes.querySelector(`option[value="${mesAtual}"]`)) {
+        selectMes.value = mesAtual;
+    }
+}
+
+function fecharPopupRelatorios() {
+    document.getElementById('popupRelatorios').style.display = 'none';
+}
+
+function gerarRelatorio(tipo) {
+    const mesRelatorio = document.getElementById('mesRelatorio').value;
+    const dataEspecifica = document.getElementById('dataEspecifica').value;
+    
+    fecharPopupRelatorios();
+    
+    if (!window.jspdf || !window.jspdf.jsPDF) {
+        alert('jsPDF não carregado!');
+        return;
+    }
+
+    const doc = new window.jspdf.jsPDF();
+    let y = 20;
+
+    switch(tipo) {
+        case 'diario':
+            gerarRelatorioDiario(doc, y, dataEspecifica, mesRelatorio);
+            break;
+        case 'mensal':
+            gerarRelatorioMensal(doc, y, mesRelatorio);
+            break;
+        case 'funcionario':
+            gerarRelatorioFuncionarios(doc, y, mesRelatorio);
+            break;
+    }
+}
+
+function gerarRelatorioDiario(doc, y, dataEspecifica, mesRelatorio) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.text('Relatório Diário', 105, y, { align: 'center' });
+    y += 15;
+    
+    // Filtrar balancetes
+    let balancetesFiltrados = sistemaBalancete.balancetes;
+    
+    if (dataEspecifica) {
+        balancetesFiltrados = balancetesFiltrados.filter(b => b.data === dataEspecifica);
+    } else if (mesRelatorio !== 'todos') {
+        balancetesFiltrados = balancetesFiltrados.filter(b => {
+            const mesBalancete = b.data.substring(0, 7); // YYYY-MM
+            return mesBalancete === mesRelatorio;
+        });
+    }
+    
+    // Agrupar balancetes por data
+    const balancetesPorData = {};
+    balancetesFiltrados.forEach(b => {
+        const data = b.data;
+        if (!balancetesPorData[data]) {
+            balancetesPorData[data] = [];
+        }
+        balancetesPorData[data].push(b);
+    });
+    
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'normal');
+    
+    Object.keys(balancetesPorData).sort().forEach(data => {
+        if (y > 250) { doc.addPage(); y = 20; }
+        
+        doc.setFont('helvetica', 'bold');
+        doc.text(`Data: ${new Date(data + 'T00:00:00').toLocaleDateString('pt-BR')}`, 20, y);
+        y += 8;
+        
+        const balancetes = balancetesPorData[data];
+        let totalDebitos = 0, totalCreditos = 0;
+        
+        balancetes.forEach(b => {
+            totalDebitos += b.totalDebitos;
+            totalCreditos += b.totalCreditos;
+        });
+        
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Balancetes: ${balancetes.length}`, 30, y);
+        doc.text(`Total Débitos: R$ ${sistemaBalancete.formatarMoeda(totalDebitos)}`, 30, y + 6);
+        doc.text(`Total Créditos: R$ ${sistemaBalancete.formatarMoeda(totalCreditos)}`, 30, y + 12);
+        y += 20;
+    });
+    
+    doc.save('relatorio_diario.pdf');
+}
+
+function gerarRelatorioMensal(doc, y, mesRelatorio) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.text('Relatório Mensal', 105, y, { align: 'center' });
+    y += 15;
+    
+    // Filtrar balancetes
+    let balancetesFiltrados = sistemaBalancete.balancetes;
+    
+    if (mesRelatorio !== 'todos') {
+        balancetesFiltrados = balancetesFiltrados.filter(b => {
+            const mesBalancete = b.data.substring(0, 7); // YYYY-MM
+            return mesBalancete === mesRelatorio;
+        });
+    }
+    
+    // Agrupar por mês/ano
+    const balancetesPorMes = {};
+    balancetesFiltrados.forEach(b => {
+        const data = new Date(b.data + 'T00:00:00');
+        const mesAno = `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}`;
+        if (!balancetesPorMes[mesAno]) {
+            balancetesPorMes[mesAno] = [];
+        }
+        balancetesPorMes[mesAno].push(b);
+    });
+    
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'normal');
+    
+    Object.keys(balancetesPorMes).sort().forEach(mesAno => {
+        if (y > 240) { doc.addPage(); y = 20; }
+        
+        const [ano, mes] = mesAno.split('-');
+        const nomesMeses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+                           'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+        
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${nomesMeses[parseInt(mes) - 1]} ${ano}`, 20, y);
+        y += 8;
+        
+        const balancetes = balancetesPorMes[mesAno];
+        let totalDebitos = 0, totalCreditos = 0;
+        
+        balancetes.forEach(b => {
+            totalDebitos += b.totalDebitos;
+            totalCreditos += b.totalCreditos;
+        });
+        
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Balancetes lançados: ${balancetes.length}`, 30, y);
+        doc.text(`Total movimentação débitos: R$ ${sistemaBalancete.formatarMoeda(totalDebitos)}`, 30, y + 6);
+        doc.text(`Total movimentação créditos: R$ ${sistemaBalancete.formatarMoeda(totalCreditos)}`, 30, y + 12);
+        doc.text(`Saldo período: R$ ${sistemaBalancete.formatarMoeda(totalDebitos - totalCreditos)}`, 30, y + 18);
+        y += 28;
+    });
+    
+    doc.save('relatorio_mensal.pdf');
+}
+
+function gerarRelatorioFuncionarios(doc, y, mesRelatorio) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.text('Relatório de Funcionários', 105, y, { align: 'center' });
+    y += 15;
+    
+    // Filtrar balancetes
+    let balancetesFiltrados = sistemaBalancete.balancetes;
+    
+    if (mesRelatorio !== 'todos') {
+        balancetesFiltrados = balancetesFiltrados.filter(b => {
+            const mesBalancete = b.data.substring(0, 7); // YYYY-MM
+            return mesBalancete === mesRelatorio;
+        });
+    }
+    
+    // Filtrar contas relacionadas a funcionários
+    const contasFuncionarios = [
+        'INSS a pagar', 'FGTS a recolher', 'IRRF a compensar', 
+        'Ordenados e salários a pagar', '13º a pagar', 'Ferias a pagar',
+        'Encargos sociais a pagar', 'Adiantamentos para despesas',
+        'Antecipação de salários e ordenados', 'Empréstimos a funcionários',
+        'Créditos de funcionários'
+    ];
+    
+    let totalINSS = 0, totalFGTS = 0, totalIRRF = 0, totalSalarios = 0;
+    
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'normal');
+    
+    balancetesFiltrados.forEach(balancete => {
+        balancete.lancamentos.forEach(lancamento => {
+            if (contasFuncionarios.some(conta => lancamento.conta.includes(conta))) {
+                if (y > 250) { doc.addPage(); y = 20; }
+                
+                doc.text(`${lancamento.conta}: R$ ${sistemaBalancete.formatarMoeda(lancamento.valor)}`, 20, y);
+                if (lancamento.descricao) {
+                    doc.text(`   ${lancamento.descricao}`, 20, y + 6);
+                    y += 6;
+                }
+                y += 8;
+                
+                // Somar totais por categoria
+                if (lancamento.conta.includes('INSS')) totalINSS += lancamento.valor;
+                if (lancamento.conta.includes('FGTS')) totalFGTS += lancamento.valor;
+                if (lancamento.conta.includes('IRRF')) totalIRRF += lancamento.valor;
+                if (lancamento.conta.includes('salário') || lancamento.conta.includes('Ordenados')) {
+                    totalSalarios += lancamento.valor;
+                }
+            }
+        });
+    });
+    
+    if (y > 230) { doc.addPage(); y = 20; }
+    
+    y += 10;
+    doc.setFont('helvetica', 'bold');
+    doc.text('Resumo:', 20, y);
+    y += 8;
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Total INSS: R$ ${sistemaBalancete.formatarMoeda(totalINSS)}`, 30, y);
+    doc.text(`Total FGTS: R$ ${sistemaBalancete.formatarMoeda(totalFGTS)}`, 30, y + 8);
+    doc.text(`Total IRRF: R$ ${sistemaBalancete.formatarMoeda(totalIRRF)}`, 30, y + 16);
+    doc.text(`Total Salários: R$ ${sistemaBalancete.formatarMoeda(totalSalarios)}`, 30, y + 24);
+    
+    doc.save('relatorio_funcionarios.pdf');
 }
 
 // Inicializar sistema quando a página carregar

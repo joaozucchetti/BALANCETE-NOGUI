@@ -29,20 +29,27 @@
                         <h3>Lançamentos</h3>
                         <div id="lancamentos-container">
                             <div class="lancamento-item">
-                                <select class="tipo" required>
-                                    <option value="">Tipo</option>
-                                    <option value="debito">Débito</option>
-                                    <option value="credito">Crédito</option>
-                                </select>
-                                <div class="conta-selector" style="display: none;">
-                                    <input type="text" class="conta-search" placeholder="Buscar conta...">
-                                    <select class="conta" required>
-                                        <option value="">Selecione a conta</option>
+                                <div class="lancamento-main">
+                                    <select class="tipo" required>
+                                        <option value="">Tipo</option>
+                                        <option value="debito">Débito</option>
+                                        <option value="credito">Crédito</option>
                                     </select>
+                                    <div class="conta-selector" style="display: none;">
+                                        <input type="text" class="conta-input" placeholder="Digite para buscar conta..." autocomplete="off">
+                                        <div class="sugestoes-container" style="display: none;">
+                                            <div class="sugestoes-lista"></div>
+                                        </div>
+                                        <input type="hidden" class="conta-selecionada">
+                                    </div>
+                                    <input type="text" placeholder="Valor (ex: 1500,50)" class="valor" required>
+                                    <button type="button" class="remove-lancamento"
+                                        onclick="removerLancamento(this)">❌</button>
                                 </div>
-                                <input type="number" placeholder="Valor" class="valor" step="0.01" min="0" required>
-                                <button type="button" class="remove-lancamento"
-                                    onclick="removerLancamento(this)">❌</button>
+                                <hr class="descricao-separator">
+                                <div class="descricao-container">
+                                    <input type="text" placeholder="Descrição do lançamento (opcional)" class="descricao">
+                                </div>
                             </div>
                         </div>
                         <button type="button" id="addLancamento" onclick="adicionarLancamento()">➕ Adicionar
@@ -70,7 +77,11 @@
                 <h2>Histórico de Balancetes</h2>
                 <div class="stats">
                     <span>Total de balancetes: <strong id="totalBalancetes">0</strong></span>
-                    <button onclick="limparCache()" class="clear-cache-btn">🗑️ Limpar Cache</button>
+                    <div style="display: flex; gap: 10px;">
+                        <button type="button" onclick="abrirPopupRelatorios()" class="gerar-relatorio-btn">📊 Gerar Relatório</button>
+                        <button onclick="exportarTodosPDF()" class="exportar-todos-btn">📄 Exportar Todos em PDF</button>
+                        <button onclick="limparCache()" class="clear-cache-btn">🗑️ Limpar Cache</button>
+                    </div>
                 </div>
                 <div id="historico-container">
                     <p class="empty-state">Nenhum balancete lançado ainda.</p>
@@ -79,6 +90,57 @@
         </main>
     </div>
 
+    <!-- Popup de Relatórios -->
+    <div id="popupRelatorios" class="popup-overlay" style="display: none;">
+        <div class="popup-content">
+            <div class="popup-header">
+                <h3>Gerar Relatório</h3>
+                <button onclick="fecharPopupRelatorios()" class="btn-fechar">&times;</button>
+            </div>
+            <div class="popup-body">
+                <div class="filtros-relatorio">
+                    <div class="filtro-grupo">
+                        <label for="mesRelatorio">Período:</label>
+                        <select id="mesRelatorio">
+                            <option value="todos">Todos os períodos</option>
+                            <option value="2025-01">Janeiro 2025</option>
+                            <option value="2025-02">Fevereiro 2025</option>
+                            <option value="2025-03">Março 2025</option>
+                            <option value="2025-04">Abril 2025</option>
+                            <option value="2025-05">Maio 2025</option>
+                            <option value="2025-06">Junho 2025</option>
+                            <option value="2025-07">Julho 2025</option>
+                            <option value="2025-08">Agosto 2025</option>
+                            <option value="2025-09">Setembro 2025</option>
+                            <option value="2025-10">Outubro 2025</option>
+                            <option value="2025-11">Novembro 2025</option>
+                            <option value="2025-12">Dezembro 2025</option>
+                        </select>
+                    </div>
+                    <div class="filtro-grupo">
+                        <label for="dataEspecifica">Data específica (para relatório diário):</label>
+                        <input type="date" id="dataEspecifica">
+                    </div>
+                </div>
+                <div class="opcoes-relatorio">
+                    <button onclick="gerarRelatorio('diario')" class="opcao-btn">
+                        📅 Relatório Diário
+                        <small>Balancetes da data selecionada</small>
+                    </button>
+                    <button onclick="gerarRelatorio('mensal')" class="opcao-btn">
+                        📊 Relatório Mensal
+                        <small>Consolidado do período selecionado</small>
+                    </button>
+                    <button onclick="gerarRelatorio('funcionario')" class="opcao-btn">
+                        👥 Relatório Funcionários
+                        <small>INSS, FGTS, IRRF do período</small>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="script.js"></script>
 </body>
 
